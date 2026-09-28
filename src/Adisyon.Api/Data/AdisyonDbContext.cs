@@ -19,6 +19,8 @@ public class AdisyonDbContext(DbContextOptions<AdisyonDbContext> options, Tenant
     public DbSet<TableSession> TableSessions => Set<TableSession>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<User> Users => Set<User>();
+    public DbSet<Device> Devices => Set<Device>();
 
     /// <summary>
     /// Sorgu filtresinde kullanılır. Kiracı yoksa Guid.Empty döner; hiçbir kayıt Guid.Empty'ye ait
@@ -39,6 +41,8 @@ public class AdisyonDbContext(DbContextOptions<AdisyonDbContext> options, Tenant
         {
             e.Property(x => x.Name).HasMaxLength(200);
             e.Property(x => x.Address).HasMaxLength(500);
+            e.Property(x => x.PairingCodeHash).HasMaxLength(64);
+            e.HasIndex(x => x.PairingCodeHash).IsUnique();
         });
 
         modelBuilder.Entity<DiningTable>(e =>
@@ -95,6 +99,26 @@ public class AdisyonDbContext(DbContextOptions<AdisyonDbContext> options, Tenant
             e.HasOne<Order>().WithMany(o => o.Items).HasForeignKey(x => x.OrderId)
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasOne<Product>().WithMany().HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<User>(e =>
+        {
+            e.Property(x => x.DisplayName).HasMaxLength(100);
+            e.Property(x => x.PinHash).HasMaxLength(64);
+            // Aynı restoranda iki kişi aynı PIN'i kullanamaz. Veritabanı da bunu garanti ediyor.
+            e.HasIndex(x => new { x.TenantId, x.PinHash }).IsUnique();
+            e.Property(x => x.Role).HasConversion<string>().HasMaxLength(20);
+            e.HasOne<Branch>().WithMany().HasForeignKey(x => x.BranchId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Device>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.Property(x => x.TokenHash).HasMaxLength(64);
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasOne<Branch>().WithMany().HasForeignKey(x => x.BranchId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

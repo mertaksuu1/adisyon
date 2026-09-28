@@ -1,4 +1,5 @@
 using Adisyon.Api.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Adisyon.Api.Controllers;
@@ -8,6 +9,7 @@ namespace Adisyon.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/health")]
+[AllowAnonymous]
 public class HealthController(AdisyonDbContext db) : ControllerBase
 {
     [HttpGet]

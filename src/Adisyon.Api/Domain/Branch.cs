@@ -8,5 +8,11 @@ public class Branch : ITenantOwned
     public required string Name { get; set; }
     public string? Address { get; set; }
 
+    /// <summary>
+    /// Yeni bir cihazı bu şubeye bağlamak için girilen eşleştirme kodunun SHA-256 özeti.
+    /// Kodun kendisi yalnızca oluşturulduğu anda gösterilir; unutulursa yenisi üretilir.
+    /// </summary>
+    public string? PairingCodeHash { get; set; }
+
     public List<DiningTable> Tables { get; set; } = [];
 }

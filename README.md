@@ -36,7 +36,16 @@ npm run dev
 
 http://localhost:5173 adresindeki sayfada Web, API ve Veritabanı satırlarının üçü de "Çalışıyor" göstermeli.
 
-İlk açılışta API veritabanı tablolarını kendisi oluşturur ve "Demo Restoran" örnek verisini (8 masa, 10 ürünlük menü) yükler.
+İlk açılışta API veritabanı tablolarını kendisi oluşturur ve "Demo Restoran" örnek verisini (8 masa, 10 ürünlük menü, her rolden bir personel) yükler.
+
+## Giriş nasıl çalışır?
+
+E-posta yok; personel 4 haneli PIN ile girer.
+
+1. **Cihaz eşleştirme (bir kez):** Bilgisayar, şubenin eşleştirme koduyla `POST /api/auth/pair` üzerinden restorana bağlanır ve bir cihaz anahtarı alır.
+2. **PIN girişi:** Eşleştirilmiş cihaz, anahtarını `X-Device-Token` başlığında göndererek `POST /api/auth/pin-login` ile PIN'i doğrular. PIN'e göre kişinin rolü (sahip, yönetici, garson, mutfak, kasa) belirlenir.
+
+Demo eşleştirme kodu ve personel PIN'leri: [DevDataSeeder.cs](src/Adisyon.Api/Data/DevDataSeeder.cs) (yalnızca geliştirme ortamı).
 
 ## Veritabanı değişiklikleri (migration)
 
