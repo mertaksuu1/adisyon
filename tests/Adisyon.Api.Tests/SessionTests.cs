@@ -250,6 +250,129 @@ public class SessionTests(ApiFactory factory)
         Assert.All(lines, l => Assert.True(l.Length <= TicketFormat.PaperWidth, $"Satır kâğıda sığmıyor: '{l}'"));
     }
 
+    // ---------------- İptal, ikram, masa taşıma ----------------
+
+    private static async Task<HttpResponseMessage> AdjustAsync(HttpClient client, SessionDto session, string action, Guid itemId, int quantity) =>
+        await client.PostAsJsonAsync($"/api/sessions/{session.Id}/items/{itemId}/{action}",
+            new AdjustItemRequest(quantity, session.Version), ApiFactory.JsonOptions);
+
+    private static async Task<SessionDto> ReadSessionAsync(HttpResponseMessage response)
+    {
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<SessionDto>(ApiFactory.JsonOptions))!;
+    }
+
+    private static OrderItemDto Item(SessionDto session, string productName) =>
+        session.Orders.SelectMany(o => o.Items).First(i => i.ProductName == productName && !i.IsVoided && !i.IsComped);
+
+    [Fact]
+    public async Task Voiding_one_of_two_splits_the_line_and_notifies_kitchen()
+    {
+        var (owner, waiter, cashier, table, kebap, _) = await SetUpAsync();
+        var session = await OpenAsync(waiter, table.Id);
+        session = await AddOrderAsync(waiter, session.Id, new AddOrderItem(kebap.Id, 2));
+
+        var after = await ReadSessionAsync(await AdjustAsync(cashier, session, "void", Item(session, "Adana Kebap").Id, 1));
+
+        Assert.Equal(380m, after.Total); // 2 x 380'den 1'i düştü
+        var lines = after.Orders.Single().Items;
+        Assert.Equal(2, lines.Count);
+        Assert.Contains(lines, i => i.Quantity == 1 && i.IsVoided);
+        Assert.Contains(lines, i => i.Quantity == 1 && !i.IsVoided);
+        var kitchen = (await owner.GetFromJsonAsync<List<PrintedTicket>>("/api/print/recent", ApiFactory.JsonOptions))!;
+        Assert.Contains(kitchen, t => t.Text.Contains("İPTAL") && t.Text.Contains("1 x Adana Kebap"));
+    }
+
+    [Fact]
+    public async Task Comped_item_is_free_and_shown_on_the_bill()
+    {
+        var (owner, _, cashier, session) = await OpenWithOrderAsync(); // 1 kebap + 2 ayran = 460
+
+        var after = await ReadSessionAsync(await AdjustAsync(cashier, session, "comp", Item(session, "Ayran").Id, 1));
+        (await cashier.PostAsync($"/api/sessions/{after.Id}/print-bill", null)).EnsureSuccessStatusCode();
+
+        Assert.Equal(420m, after.Total);
+        var bill = (await owner.GetFromJsonAsync<List<PrintedTicket>>("/api/print/recent", ApiFactory.JsonOptions))!
+            .First(t => t.Kind == TicketKind.Bill);
+        Assert.Contains("1 x Ayran (İKRAM)", bill.Text);
+        Assert.Contains(bill.Text.Split('\n'), l => l.StartsWith("TOPLAM") && l.TrimEnd().EndsWith("420,00"));
+    }
+
+    [Fact]
+    public async Task Waiter_cannot_void_or_comp()
+    {
+        var (_, waiter, _, session) = await OpenWithOrderAsync();
+
+        var response = await AdjustAsync(waiter, session, "void", Item(session, "Adana Kebap").Id, 1);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Cannot_void_below_what_was_already_paid()
+    {
+        var (_, _, cashier, session) = await OpenWithOrderAsync(); // 460
+        var paid = await ReadSessionAsync(await PayAsync(cashier, session, PaymentMethod.Cash, 400m));
+
+        var response = await AdjustAsync(cashier, paid, "void", Item(paid, "Adana Kebap").Id, 1); // toplam 80'e düşerdi
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Moving_to_an_empty_table_moves_the_session()
+    {
+        var (owner, waiter, _, session) = await OpenWithOrderAsync();
+        var garden = await CreateTableAsync(owner, "Bahçe 1");
+
+        var moved = await ReadSessionAsync(await waiter.PostAsJsonAsync($"/api/sessions/{session.Id}/move",
+            new MoveSessionRequest(garden.Id, session.Version), ApiFactory.JsonOptions));
+
+        Assert.Equal((session.Id, "Bahçe 1", 460m), (moved.Id, moved.TableName, moved.Total));
+        var tables = (await waiter.GetFromJsonAsync<List<TableDto>>("/api/tables", ApiFactory.JsonOptions))!;
+        Assert.Null(tables.Single(t => t.Id == session.TableId).OpenSession);
+        Assert.Equal(460m, tables.Single(t => t.Id == garden.Id).OpenSession!.Total);
+    }
+
+    [Fact]
+    public async Task Moving_to_an_occupied_table_merges_orders_and_payments()
+    {
+        var (owner, waiter, cashier, table, kebap, ayran) = await SetUpAsync();
+        var second = await CreateTableAsync(owner, "Masa 2");
+        var a = await OpenAsync(waiter, table.Id);
+        a = await AddOrderAsync(waiter, a.Id, new AddOrderItem(kebap.Id, 1)); // 380
+        a = await ReadSessionAsync(await PayAsync(cashier, a, PaymentMethod.Card, 100m));
+        var b = await OpenAsync(waiter, second.Id);
+        await AddOrderAsync(waiter, b.Id, new AddOrderItem(ayran.Id, 2)); // 80
+
+        var merged = await ReadSessionAsync(await waiter.PostAsJsonAsync($"/api/sessions/{a.Id}/move",
+            new MoveSessionRequest(second.Id, a.Version), ApiFactory.JsonOptions));
+
+        Assert.Equal((b.Id, 460m, 100m, 360m), (merged.Id, merged.Total, merged.Paid, merged.Remaining));
+        var tables = (await waiter.GetFromJsonAsync<List<TableDto>>("/api/tables", ApiFactory.JsonOptions))!;
+        Assert.Null(tables.Single(t => t.Id == table.Id).OpenSession);
+        var kitchen = (await owner.GetFromJsonAsync<List<PrintedTicket>>("/api/print/recent", ApiFactory.JsonOptions))!;
+        Assert.Contains(kitchen, t => t.Text.Contains("MASALAR BİRLEŞTİ"));
+    }
+
+    [Fact]
+    public async Task Cannot_move_to_the_same_table()
+    {
+        var (_, waiter, _, session) = await OpenWithOrderAsync();
+
+        var response = await waiter.PostAsJsonAsync($"/api/sessions/{session.Id}/move",
+            new MoveSessionRequest(session.TableId, session.Version), ApiFactory.JsonOptions);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    private static async Task<TableDto> CreateTableAsync(HttpClient owner, string name)
+    {
+        var response = await owner.PostAsJsonAsync("/api/tables", new SaveTableRequest(name), ApiFactory.JsonOptions);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<TableDto>(ApiFactory.JsonOptions))!;
+    }
+
     private static async Task<SessionDto> OpenAsync(HttpClient client, Guid tableId)
     {
         var response = await client.PostAsync($"/api/tables/{tableId}/session", null);

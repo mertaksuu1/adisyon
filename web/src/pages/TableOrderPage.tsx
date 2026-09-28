@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router'
 import { api, ApiError } from '../api/client'
-import type { Category, NewOrderItem, Product, Session, Table } from '../api/types'
+import type { Category, NewOrderItem, OrderItem, Product, Session, Table } from '../api/types'
 import { useAuth } from '../auth/useAuth'
 import { canCheckout } from '../auth/roles'
+import { ItemActionDialog } from '../components/ItemActionDialog'
+import { MoveTableDialog } from '../components/MoveTableDialog'
 import { PaymentDialog } from '../components/PaymentDialog'
 import { TopBar } from '../components/TopBar'
 import { formatMoney, formatTime } from '../lib/format'
@@ -98,10 +100,26 @@ export default function TableOrderPage() {
   })
 
   const [paying, setPaying] = useState(false)
+  const [actionItem, setActionItem] = useState<OrderItem | null>(null)
+  const [moving, setMoving] = useState(false)
+
+  const closeDialogs = () => {
+    setPaying(false)
+    setActionItem(null)
+    setMoving(false)
+  }
+
+  /** Pencerede hata (ör. adisyon bu arada değişti): pencereyi kapat, mesajı ve güncel adisyonu göster. */
+  const dialogError = (message: string) => {
+    closeDialogs()
+    setError(message)
+    queryClient.invalidateQueries({ queryKey: ['session', sessionId] })
+    queryClient.invalidateQueries({ queryKey: ['tables'] })
+  }
   const [notice, setNotice] = useState<string | null>(null)
 
   const afterPayment = (paid: Session) => {
-    setPaying(false)
+    closeDialogs()
     queryClient.invalidateQueries({ queryKey: ['tables'] })
     if (paid.status === 'Closed') {
       navigate('/garson', { state: { flash: `${table?.name}: ödeme alındı, masa kapandı.` } })
@@ -192,15 +210,30 @@ export default function TableOrderPage() {
                   {session.data.orders.map((o) => (
                     <li key={o.id} className="py-2">
                       <p className="text-xs text-stone-400">{formatTime(o.createdAt)}</p>
-                      {o.items.map((i) => (
-                        <div key={i.id} className="flex justify-between gap-2 text-sm">
-                          <span className="text-stone-700">
-                            {i.quantity} × {i.productName}
-                            {i.note && <span className="block text-xs text-amber-700">{i.note}</span>}
-                          </span>
-                          <span className="text-stone-600 tabular-nums">{formatMoney(i.unitPrice * i.quantity)}</span>
-                        </div>
-                      ))}
+                      {o.items.map((i) => {
+                        const adjustable = user != null && canCheckout(user.role) && !i.isVoided && !i.isComped
+                        return (
+                          <button
+                            key={i.id}
+                            type="button"
+                            disabled={!adjustable}
+                            onClick={() => setActionItem(i)}
+                            className={`flex w-full justify-between gap-2 rounded px-1 text-left text-sm ${adjustable ? 'hover:bg-stone-50' : ''} ${
+                              i.isVoided ? 'text-stone-400 line-through' : 'text-stone-700'
+                            }`}
+                          >
+                            <span>
+                              {i.quantity} × {i.productName}
+                              {i.isVoided && <Tag className="bg-red-100 text-red-700">İPTAL</Tag>}
+                              {i.isComped && <Tag className="bg-green-100 text-green-800">İKRAM</Tag>}
+                              {i.note && <span className="block text-xs text-amber-700">{i.note}</span>}
+                            </span>
+                            <span className={`tabular-nums ${i.isComped ? 'text-stone-400 line-through' : ''}`}>
+                              {formatMoney(i.unitPrice * i.quantity)}
+                            </span>
+                          </button>
+                        )
+                      })}
                     </li>
                   ))}
                 </ul>
@@ -284,11 +317,19 @@ export default function TableOrderPage() {
                     setError(null)
                     printBill.mutate()
                   }}
-                  className={`rounded-xl bg-stone-100 py-3 font-semibold text-stone-800 transition hover:bg-stone-200 disabled:opacity-40 ${
-                    user && canCheckout(user.role) ? '' : 'col-span-2'
-                  }`}
+                  className="rounded-xl bg-stone-100 py-3 font-semibold text-stone-800 transition hover:bg-stone-200 disabled:opacity-40"
                 >
                   Hesap fişi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null)
+                    setMoving(true)
+                  }}
+                  className="rounded-xl bg-stone-100 py-3 font-semibold text-stone-800 transition hover:bg-stone-200"
+                >
+                  Masa taşı
                 </button>
                 {user && canCheckout(user.role) &&
                   (session.data.remaining > 0 ? (
@@ -299,16 +340,16 @@ export default function TableOrderPage() {
                         setNotice(null)
                         setPaying(true)
                       }}
-                      className="rounded-xl bg-stone-900 py-3 font-semibold text-white transition hover:bg-stone-700"
+                      className="col-span-2 rounded-xl bg-stone-900 py-3 font-semibold text-white transition hover:bg-stone-700"
                     >
-                      Ödeme al
+                      Ödeme al · {formatMoney(session.data.remaining)}
                     </button>
                   ) : (
                     <button
                       type="button"
                       disabled={closeEmpty.isPending}
                       onClick={() => closeEmpty.mutate(session.data)}
-                      className="rounded-xl bg-stone-900 py-3 font-semibold text-white transition hover:bg-stone-700 disabled:opacity-50"
+                      className="col-span-2 rounded-xl bg-stone-900 py-3 font-semibold text-white transition hover:bg-stone-700 disabled:opacity-50"
                     >
                       Masayı boşalt
                     </button>
@@ -320,21 +361,42 @@ export default function TableOrderPage() {
       </div>
 
       {paying && session.data && (
-        <PaymentDialog
+        <PaymentDialog session={session.data} onClose={closeDialogs} onPaid={afterPayment} onError={dialogError} />
+      )}
+      {actionItem && session.data && (
+        <ItemActionDialog
           session={session.data}
-          onClose={() => setPaying(false)}
-          onPaid={afterPayment}
-          onError={(message) => {
-            // Ör. sürüm çakışması: pencereyi kapat, güncel adisyonu göster.
-            setPaying(false)
-            setError(message)
-            queryClient.invalidateQueries({ queryKey: ['session', sessionId] })
+          item={actionItem}
+          onClose={closeDialogs}
+          onDone={(updated, message) => {
+            closeDialogs()
+            queryClient.setQueryData(['session', updated.id], updated)
             queryClient.invalidateQueries({ queryKey: ['tables'] })
+            setNotice(message)
           }}
+          onError={dialogError}
+        />
+      )}
+      {moving && session.data && tables.data && (
+        <MoveTableDialog
+          session={session.data}
+          tables={tables.data}
+          onClose={closeDialogs}
+          onMoved={(moved, message) => {
+            closeDialogs()
+            queryClient.invalidateQueries({ queryKey: ['tables'] })
+            setNotice(message)
+            navigate(`/garson/masa/${moved.tableId}`, { replace: true })
+          }}
+          onError={dialogError}
         />
       )}
     </div>
   )
+}
+
+function Tag({ className, children }: { className: string; children: string }) {
+  return <span className={`ml-1.5 rounded px-1 py-0.5 text-[10px] font-bold no-underline ${className}`}>{children}</span>
 }
 
 function QtyButton({ label, onClick, children }: { label: string; onClick: () => void; children: string }) {

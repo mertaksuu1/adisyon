@@ -40,6 +40,7 @@ public class TablesController(AdisyonDbContext db) : ControllerBase
                         s.OpenedAt,
                         s.Orders.Where(o => o.Status != OrderStatus.Cancelled)
                             .SelectMany(o => o.Items)
+                            .Where(i => i.VoidedAt == null && i.CompedAt == null) // iptal ve ikram hesaba yansımaz
                             .Sum(i => i.UnitPrice * i.Quantity)))
                     .FirstOrDefault()))
             .ToListAsync(cancellationToken);

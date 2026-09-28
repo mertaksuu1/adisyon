@@ -68,6 +68,10 @@ export type OrderItem = {
   unitPrice: number
   quantity: number
   note: string | null
+  /** İptal edildi: hesaba yansımaz. */
+  isVoided: boolean
+  /** İkram edildi: fişte görünür, ücreti alınmaz. */
+  isComped: boolean
 }
 
 export type Order = {

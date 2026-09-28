@@ -22,14 +22,18 @@ public static class BillTicket
             .AppendLine(Line);
 
         // Aynı ürün birden çok siparişte girildiyse fişte tek satırda toplanır ("3 x Ayran").
+        // İptaller fişte görünmez; ikramlar "(İKRAM)" olarak 0,00 ile görünür.
         var lines = session.Orders
             .Where(o => o.Status != OrderStatus.Cancelled)
             .SelectMany(o => o.Items)
-            .GroupBy(i => (i.ProductName, i.UnitPrice))
-            .Select(g => (g.Key.ProductName, g.Key.UnitPrice, Quantity: g.Sum(i => i.Quantity)));
-        foreach (var (name, unitPrice, quantity) in lines)
+            .Where(i => i.VoidedAt is null)
+            .GroupBy(i => (i.ProductName, i.UnitPrice, Comped: i.CompedAt is not null))
+            .Select(g => (g.Key.ProductName, g.Key.UnitPrice, g.Key.Comped, Quantity: g.Sum(i => i.Quantity)));
+        foreach (var (name, unitPrice, comped, quantity) in lines)
         {
-            text.AppendLine(LeftRight($"{quantity} x {name}", Money(unitPrice * quantity)));
+            text.AppendLine(comped
+                ? LeftRight($"{quantity} x {name} (İKRAM)", Money(0))
+                : LeftRight($"{quantity} x {name}", Money(unitPrice * quantity)));
         }
 
         var total = SessionMoney.Total(session);
@@ -56,7 +60,8 @@ public static class BillTicket
 public static class SessionMoney
 {
     public static decimal Total(TableSession session) =>
-        session.Orders.Where(o => o.Status != OrderStatus.Cancelled).SelectMany(o => o.Items).Sum(i => i.UnitPrice * i.Quantity);
+        session.Orders.Where(o => o.Status != OrderStatus.Cancelled)
+            .SelectMany(o => o.Items).Where(i => i.IsCharged).Sum(i => i.UnitPrice * i.Quantity);
 
     public static decimal Paid(TableSession session) => session.Payments.Sum(p => p.Amount);
 

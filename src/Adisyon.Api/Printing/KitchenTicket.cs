@@ -59,3 +59,35 @@ public record KitchenTicket(
 }
 
 public record KitchenTicketLine(int Quantity, string ProductName, string? Note);
+
+/// <summary>
+/// Mutfağa giden kısa uyarı fişleri: iptal ("boşuna pişirmeyin") ve masa değişikliği ("yemeği yeni masaya götürün").
+/// </summary>
+public static class KitchenNotice
+{
+    public static PrintJob Void(Guid branchId, string tableName, DateTimeOffset at, int quantity, string productName, string? byName) =>
+        Create(branchId, "*** İPTAL ***", tableName, at, [$"{quantity} x {productName}", "HAZIRLAMAYIN / İPTAL EDİLDİ"], byName);
+
+    public static PrintJob TableChanged(Guid branchId, string fromTable, string toTable, DateTimeOffset at, bool merged, string? byName) =>
+        Create(branchId, merged ? "MASALAR BİRLEŞTİ" : "MASA DEĞİŞTİ", toTable, at,
+            [$"{fromTable}  ->  {toTable}", merged ? $"{fromTable} siparişleri artık bu masada." : "Siparişleri yeni masaya götürün."], byName);
+
+    private static PrintJob Create(Guid branchId, string heading, string tableName, DateTimeOffset at, string[] body, string? byName)
+    {
+        var text = new StringBuilder()
+            .AppendLine(DoubleLine)
+            .AppendLine(Center(heading))
+            .AppendLine(DoubleLine)
+            .AppendLine(LeftRight(Upper(tableName), Local(at).ToString("HH:mm")));
+        if (byName is not null)
+        {
+            text.AppendLine($"Yapan: {byName}");
+        }
+        text.AppendLine(Line);
+        foreach (var line in body)
+        {
+            text.AppendLine(line);
+        }
+        return new PrintJob(TicketKind.Kitchen, branchId, tableName, text.AppendLine(DoubleLine).ToString());
+    }
+}

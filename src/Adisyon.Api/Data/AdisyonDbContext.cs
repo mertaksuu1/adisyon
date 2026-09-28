@@ -76,6 +76,8 @@ public class AdisyonDbContext(DbContextOptions<AdisyonDbContext> options, Tenant
             // Enum'ları sayı yerine metin olarak saklıyoruz; veritabanına bakınca "Open" okumak "0"dan kolay.
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.Version).IsRowVersion();
+            e.HasOne<TableSession>().WithMany().HasForeignKey(x => x.MergedIntoSessionId)
+                .OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Table).WithMany().HasForeignKey(x => x.TableId)
                 .OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Branch>().WithMany().HasForeignKey(x => x.BranchId)
@@ -103,6 +105,11 @@ public class AdisyonDbContext(DbContextOptions<AdisyonDbContext> options, Tenant
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasOne<Product>().WithMany().HasForeignKey(x => x.ProductId)
                 .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.VoidedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.CompedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.Ignore(x => x.IsCharged); // hesaplanan özellik, veritabanında kolonu yok
         });
 
         modelBuilder.Entity<User>(e =>

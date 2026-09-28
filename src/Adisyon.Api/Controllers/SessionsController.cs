@@ -14,7 +14,7 @@ namespace Adisyon.Api.Controllers;
 /// <summary>
 /// Adisyon akışı: masayı aç → sipariş ekle (bir veya birçok kez) → hesabı kapat.
 /// Sipariş gönderilince mutfak fişi yazdırılır. Ödeme tamamlanınca adisyon kendiliğinden kapanır.
-/// İptal/ikram ve masa taşıma Faz 3b'de eklenecek.
+/// İptal, ikram, masa taşıma ve birleştirme de buradadır.
 /// </summary>
 [ApiController]
 [Route("api")]
@@ -225,6 +225,179 @@ public class SessionsController(
         return (await LoadDtoAsync(session.Id, cancellationToken))!;
     }
 
+    /// <summary>
+    /// Ürünü iptal eder: hesaptan düşer ama silinmez (kim, ne zaman kaydedilir). Mutfağa "İPTAL" fişi gider.
+    /// Quantity ile satırın bir kısmı iptal edilebilir ("2 x Kebap"tan 1'i).
+    /// </summary>
+    [HttpPost("sessions/{id:guid}/items/{itemId:guid}/void")]
+    [Authorize(Roles = RoleNames.Checkout)]
+    public Task<ActionResult<SessionDto>> Void(Guid id, Guid itemId, AdjustItemRequest request, CancellationToken cancellationToken) =>
+        AdjustItemAsync(id, itemId, request, isVoid: true, cancellationToken);
+
+    /// <summary>Ürünü ikram eder: fişte görünür ama ücreti alınmaz.</summary>
+    [HttpPost("sessions/{id:guid}/items/{itemId:guid}/comp")]
+    [Authorize(Roles = RoleNames.Checkout)]
+    public Task<ActionResult<SessionDto>> Comp(Guid id, Guid itemId, AdjustItemRequest request, CancellationToken cancellationToken) =>
+        AdjustItemAsync(id, itemId, request, isVoid: false, cancellationToken);
+
+    private async Task<ActionResult<SessionDto>> AdjustItemAsync(
+        Guid id, Guid itemId, AdjustItemRequest request, bool isVoid, CancellationToken cancellationToken)
+    {
+        var session = await FindWithMoneyAsync(id, cancellationToken);
+        if (session is null)
+        {
+            return NotFound();
+        }
+        if (session.Status != TableSessionStatus.Open)
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict, title: "Bu adisyon kapatılmış.");
+        }
+        if (session.Version != request.Version)
+        {
+            return StaleSession();
+        }
+
+        var order = session.Orders.SingleOrDefault(o => o.Items.Any(i => i.Id == itemId));
+        var item = order?.Items.Single(i => i.Id == itemId);
+        if (order is null || item is null)
+        {
+            return NotFound();
+        }
+        if (!item.IsCharged)
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict, title: "Bu ürün zaten iptal veya ikram edilmiş.");
+        }
+        if (request.Quantity > item.Quantity)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: $"Bu satırda yalnızca {item.Quantity} adet var.");
+        }
+
+        // "2 x Kebap"tan 1'i: satır bölünür, ayrılan kısım işaretlenir.
+        var part = item.SplitOff(request.Quantity);
+        if (part != item)
+        {
+            order.Items.Add(part);
+        }
+        var now = timeProvider.GetUtcNow();
+        if (isVoid)
+        {
+            (part.VoidedAt, part.VoidedByUserId) = (now, User.GetUserId());
+        }
+        else
+        {
+            (part.CompedAt, part.CompedByUserId) = (now, User.GetUserId());
+        }
+
+        if (SessionMoney.Total(session) < SessionMoney.Paid(session))
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict,
+                title: "Bu masadan alınan ödeme, işlem sonrası toplamdan fazla olur. İşlem yapılamaz.");
+        }
+
+        session.UpdatedAt = now;
+        if (!await TrySaveWithVersionAsync(session, request.Version, cancellationToken))
+        {
+            return StaleSession();
+        }
+
+        if (isVoid)
+        {
+            await PrintAsync(KitchenNotice.Void(session.BranchId, session.Table!.Name, now, part.Quantity, part.ProductName, User.Identity?.Name));
+        }
+        await notifier.TablesChangedAsync(session.BranchId);
+        return (await LoadDtoAsync(session.Id, cancellationToken))!;
+    }
+
+    /// <summary>
+    /// Adisyonu başka masaya taşır. Hedef masa boşsa adisyon oraya geçer; doluysa iki adisyon birleşir
+    /// (siparişler ve alınmış ödemeler hedefe aktarılır, bu adisyon kapanır). Mutfağa masa değişikliği fişi gider.
+    /// </summary>
+    [HttpPost("sessions/{id:guid}/move")]
+    [Authorize(Roles = RoleNames.FrontOfHouse)]
+    public async Task<ActionResult<SessionDto>> Move(Guid id, MoveSessionRequest request, CancellationToken cancellationToken)
+    {
+        var source = await FindWithMoneyAsync(id, cancellationToken);
+        if (source is null)
+        {
+            return NotFound();
+        }
+        if (source.Status != TableSessionStatus.Open)
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict, title: "Bu adisyon kapatılmış.");
+        }
+        if (source.Version != request.Version)
+        {
+            return StaleSession();
+        }
+
+        var target = await db.Tables.SingleOrDefaultAsync(t => t.Id == request.TargetTableId && t.BranchId == source.BranchId, cancellationToken);
+        if (target is null || !target.IsActive || target.Id == source.TableId)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Geçerli başka bir masa seçin.");
+        }
+
+        var targetSession = await db.TableSessions
+            .Include(s => s.Orders)
+            .Include(s => s.Payments)
+            .AsSplitQuery()
+            .SingleOrDefaultAsync(s => s.TableId == target.Id && s.Status == TableSessionStatus.Open, cancellationToken);
+
+        var now = timeProvider.GetUtcNow();
+        var fromName = source.Table!.Name;
+        Guid resultId;
+        if (targetSession is null)
+        {
+            // Boş masaya taşıma: aynı adisyon, yeni masa.
+            (source.TableId, source.Table, source.UpdatedAt) = (target.Id, target, now);
+            resultId = source.Id;
+        }
+        else
+        {
+            // Dolu masayla birleştirme: her şey hedef adisyona geçer, bu adisyon kapanır.
+            foreach (var order in source.Orders.ToList())
+            {
+                order.TableSessionId = targetSession.Id;
+            }
+            foreach (var payment in source.Payments.ToList())
+            {
+                payment.TableSessionId = targetSession.Id;
+            }
+            (source.Status, source.ClosedAt, source.UpdatedAt, source.MergedIntoSessionId) =
+                (TableSessionStatus.Closed, now, now, targetSession.Id);
+            targetSession.UpdatedAt = now; // hedefin sürümü değişir; orada açık ödeme ekranı varsa eskimiş olur
+            resultId = targetSession.Id;
+        }
+
+        try
+        {
+            if (!await TrySaveWithVersionAsync(source, request.Version, cancellationToken))
+            {
+                return StaleSession();
+            }
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict, title: $"{target.Name} az önce açıldı. Tekrar deneyin.");
+        }
+
+        await PrintAsync(KitchenNotice.TableChanged(source.BranchId, fromName, target.Name, now, merged: targetSession is not null, User.Identity?.Name));
+        await notifier.TablesChangedAsync(source.BranchId);
+        return (await LoadDtoAsync(resultId, cancellationToken))!;
+    }
+
+    /// <summary>Yazdırır; yazıcı hatası işlemi geri almaz (kayıt zaten yapıldı), yalnızca günlüğe yazılır.</summary>
+    private async Task PrintAsync(PrintJob job)
+    {
+        try
+        {
+            await printer.PrintAsync(job, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Fiş yazdırılamadı ({Kind}, {Title})", job.Kind, job.Title);
+        }
+    }
+
     /// <summary>Müşteriye verilecek hesap fişini (adisyon pusulası) yazdırır.</summary>
     [HttpPost("sessions/{id:guid}/print-bill")]
     [Authorize(Roles = RoleNames.FrontOfHouse)]
@@ -320,6 +493,11 @@ public record AddOrderItem(
 
 public record CloseSessionRequest(uint Version);
 
+/// <summary>Satırdan kaç adet iptal/ikram edileceği.</summary>
+public record AdjustItemRequest([Range(1, 99)] int Quantity, uint Version);
+
+public record MoveSessionRequest(Guid TargetTableId, uint Version);
+
 /// <summary>Amount boşsa kalan tutarın tamamı ödenir.</summary>
 public record PayRequest(PaymentMethod Method, uint Version, [Range(0.01, 99_999_999)] decimal? Amount = null);
 
@@ -351,10 +529,15 @@ public record OrderDto(Guid Id, OrderSource Source, OrderStatus Status, DateTime
     public static OrderDto From(Order o)
     {
         // Satırlar garsonun girdiği sırayla (Position) gösterilir.
-        var items = o.Items.OrderBy(i => i.Position)
-            .Select(i => new OrderItemDto(i.Id, i.ProductId, i.ProductName, i.UnitPrice, i.Quantity, i.Note)).ToList();
-        return new OrderDto(o.Id, o.Source, o.Status, o.CreatedAt, items.Sum(i => i.UnitPrice * i.Quantity), items);
+        var items = o.Items.OrderBy(i => i.Position).ThenBy(i => i.Id)
+            .Select(i => new OrderItemDto(i.Id, i.ProductId, i.ProductName, i.UnitPrice, i.Quantity, i.Note,
+                IsVoided: i.VoidedAt is not null, IsComped: i.CompedAt is not null))
+            .ToList();
+        var total = items.Where(i => !i.IsVoided && !i.IsComped).Sum(i => i.UnitPrice * i.Quantity);
+        return new OrderDto(o.Id, o.Source, o.Status, o.CreatedAt, total, items);
     }
 }
 
-public record OrderItemDto(Guid Id, Guid ProductId, string ProductName, decimal UnitPrice, int Quantity, string? Note);
+public record OrderItemDto(
+    Guid Id, Guid ProductId, string ProductName, decimal UnitPrice, int Quantity, string? Note,
+    bool IsVoided = false, bool IsComped = false);

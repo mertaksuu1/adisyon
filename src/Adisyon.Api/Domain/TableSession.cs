@@ -28,6 +28,9 @@ public class TableSession : ITenantOwned
     /// </summary>
     public uint Version { get; set; }
 
+    /// <summary>Bu adisyon başka bir masanınkiyle birleştirildiyse, birleştirildiği adisyon.</summary>
+    public Guid? MergedIntoSessionId { get; set; }
+
     public List<Order> Orders { get; set; } = [];
     public List<Payment> Payments { get; set; } = [];
 }
