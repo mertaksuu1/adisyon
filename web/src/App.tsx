@@ -4,6 +4,7 @@ import type { UserRole } from './api/types'
 import { useAuth } from './auth/useAuth'
 import { homePathFor } from './auth/roles'
 import PinPage from './pages/PinPage'
+import ReportPage from './pages/ReportPage'
 import SetupPage from './pages/SetupPage'
 import StatusPage from './pages/StatusPage'
 import TableOrderPage from './pages/TableOrderPage'
@@ -23,6 +24,7 @@ export default function App() {
 
       <Route path="/garson" element={<RequireUser roles={['Owner', 'Manager', 'Waiter', 'Cashier']}><TablesPage /></RequireUser>} />
       <Route path="/garson/masa/:tableId" element={<RequireUser roles={['Owner', 'Manager', 'Waiter', 'Cashier']}><TableOrderPage /></RequireUser>} />
+      <Route path="/rapor" element={<RequireUser roles={['Owner', 'Manager']}><ReportPage /></RequireUser>} />
       <Route path="/fisler" element={<RequireUser roles={['Owner', 'Manager', 'Kitchen']}><TicketsPage /></RequireUser>} />
 
       <Route path="*" element={<Home />} />

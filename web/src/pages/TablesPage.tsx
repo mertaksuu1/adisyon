@@ -48,9 +48,14 @@ export default function TablesPage() {
             {tables.isSuccess && `${occupied} dolu · ${active.length - occupied} boş`}
           </p>
           {(user?.role === 'Owner' || user?.role === 'Manager') && (
-            <Link to="/fisler" className="text-sm font-semibold text-amber-700 hover:underline">
-              Fişler →
-            </Link>
+            <span className="flex gap-4">
+              <Link to="/rapor" className="text-sm font-semibold text-amber-700 hover:underline">
+                Gün sonu raporu →
+              </Link>
+              <Link to="/fisler" className="text-sm font-semibold text-amber-700 hover:underline">
+                Fişler →
+              </Link>
+            </span>
           )}
         </div>
 

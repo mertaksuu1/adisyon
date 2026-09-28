@@ -10,6 +10,8 @@ import { formatTime } from '../lib/format'
  * Fişler (sanal yazıcı): mutfak ve hesap fişleri. Yazıcı bağlanana kadar fişlerin kâğıtta nasıl görüneceğini gösterir.
  * Yeni sipariş gelince liste kendiliğinden yenilenir.
  */
+const ticketKindLabels: Record<PrintedTicket['kind'], string> = { Kitchen: 'Mutfak', Bill: 'Hesap', Report: 'Rapor' }
+
 export default function TicketsPage() {
   const { user } = useAuth()
   const tickets = useQuery({
@@ -45,7 +47,7 @@ export default function TicketsPage() {
           {tickets.data?.map((t) => (
             <li key={t.id}>
               <p className="mb-1 text-xs text-stone-500">
-                {t.kind === 'Kitchen' ? 'Mutfak' : 'Hesap'} · {t.title} · {formatTime(t.printedAt)}
+                {ticketKindLabels[t.kind]} · {t.title} · {formatTime(t.printedAt)}
               </p>
               {/* 48 karakterlik termal fiş: sabit genişlikli yazı ve beyaz kâğıt şeridi */}
               <pre className="w-fit overflow-x-auto bg-white px-3 py-4 font-mono text-xs leading-snug text-black shadow-md">

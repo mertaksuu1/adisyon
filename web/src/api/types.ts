@@ -110,7 +110,7 @@ export type Session = {
 /** Sanal yazıcının bastığı fiş (sunucudaki PrintedTicket). */
 export type PrintedTicket = {
   id: string
-  kind: 'Kitchen' | 'Bill'
+  kind: 'Kitchen' | 'Bill' | 'Report'
   branchId: string
   /** Masa adı. */
   title: string
@@ -123,4 +123,34 @@ export type NewOrderItem = {
   productId: string
   quantity: number
   note?: string | null
+}
+
+/** Gün sonu (Z) raporu (sunucudaki ZReport). */
+export type ZReport = {
+  /** İş günü, "2026-09-28". */
+  date: string
+  from: string
+  to: string
+  cashTotal: number
+  cardTotal: number
+  paymentsTotal: number
+  closedSessionCount: number
+  salesTotal: number
+  averageBill: number
+  voids: AdjustmentLine[]
+  voidsTotal: number
+  comps: AdjustmentLine[]
+  compsTotal: number
+  topProducts: { productName: string; quantity: number; amount: number }[]
+  openTableCount: number
+  openTablesTotal: number
+}
+
+export type AdjustmentLine = {
+  at: string
+  tableName: string
+  productName: string
+  quantity: number
+  amount: number
+  byName: string | null
 }

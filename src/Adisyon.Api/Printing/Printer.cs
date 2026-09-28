@@ -8,6 +8,8 @@ public enum TicketKind
     Kitchen,
     /// <summary>Hesap fişi (adisyon pusulası): müşteriye verilen.</summary>
     Bill,
+    /// <summary>Gün sonu (Z) raporu.</summary>
+    Report,
 }
 
 /// <summary>Yazdırılacak fiş: türü, hangi şubenin yazıcısına gideceği, başlığı ve kâğıda basılacak metin.</summary>
