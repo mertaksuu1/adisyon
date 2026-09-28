@@ -2,6 +2,9 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 
+/** Sunucudaki DevDataSeeder.DemoPairingCode ile aynı olmalı. Yalnızca geliştirmede kullanılır. */
+const DEV_DEMO_PAIRING_CODE = 'DEMO-DEMO-DEMO'
+
 /**
  * İlk kurulum: bilgisayarı şubenin eşleştirme koduyla restorana bağlar. Her cihazda bir kez yapılır.
  */
@@ -15,10 +18,14 @@ export default function SetupPage() {
 
   async function submit(e: FormEvent) {
     e.preventDefault()
+    await connect(code)
+  }
+
+  async function connect(pairingCode: string) {
     setBusy(true)
     setError(null)
     try {
-      await pair(code, deviceName)
+      await pair(pairingCode, deviceName)
       navigate('/giris', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Eşleştirme başarısız.')
@@ -71,6 +78,21 @@ export default function SetupPage() {
         >
           {busy ? 'Bağlanıyor…' : 'Cihazı bağla'}
         </button>
+
+        {/* Yalnızca "npm run dev" ile çalışırken görünür; gerçek kurulum paketinde bu blok ve kod hiç yer almaz. */}
+        {import.meta.env.DEV && (
+          <div className="mt-6 rounded-xl border border-dashed border-stone-300 p-3 text-center">
+            <p className="text-xs text-stone-500">Geliştirme ortamı</p>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => connect(DEV_DEMO_PAIRING_CODE)}
+              className="mt-1 text-sm font-semibold text-amber-700 hover:underline disabled:opacity-50"
+            >
+              Demo restoranı bağla
+            </button>
+          </div>
+        )}
       </form>
     </main>
   )
