@@ -50,6 +50,25 @@ public class SessionTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Items_keep_the_order_they_were_entered_in()
+    {
+        var (owner, waiter, _, table, kebap, ayran) = await SetUpAsync();
+        var category = (await owner.GetFromJsonAsync<List<CategoryDto>>("/api/menu", ApiFactory.JsonOptions))!.Single();
+        var extra = new List<ProductDto>();
+        foreach (var name in new[] { "Çorba", "Salata", "Pilav", "Künefe", "Çay", "Su" })
+        {
+            extra.Add(await MenuTests.CreateProductAsync(owner, category.Id, name, 10m));
+        }
+        // Aynı istekte 8 satır: hepsi aynı milisaniyede kaydedilir, sıra kimlikten çıkarılamaz.
+        var entered = new[] { ayran, kebap }.Concat(extra).ToList();
+        var session = await OpenAsync(waiter, table.Id);
+
+        var result = await AddOrderAsync(waiter, session.Id, [.. entered.Select(p => new AddOrderItem(p.Id, 1))]);
+
+        Assert.Equal(entered.Select(p => p.Name), result.Orders.Single().Items.Select(i => i.ProductName));
+    }
+
+    [Fact]
     public async Task Closing_with_a_stale_version_is_rejected()
     {
         var (_, waiter, cashier, table, kebap, ayran) = await SetUpAsync();

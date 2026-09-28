@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Adisyon.Api.Auth;
 using Adisyon.Api.Data;
 using Adisyon.Api.Domain;
+using Adisyon.Api.Realtime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +16,7 @@ namespace Adisyon.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api")]
-public class SessionsController(AdisyonDbContext db, TimeProvider timeProvider) : ControllerBase
+public class SessionsController(AdisyonDbContext db, TimeProvider timeProvider, BranchNotifier notifier) : ControllerBase
 {
     [HttpPost("tables/{tableId:guid}/session")]
     [Authorize(Roles = RoleNames.FrontOfHouse)]
@@ -49,6 +50,7 @@ public class SessionsController(AdisyonDbContext db, TimeProvider timeProvider) 
                 extensions: new Dictionary<string, object?> { ["sessionId"] = existing.Id });
         }
 
+        await notifier.TablesChangedAsync(branchId);
         return CreatedAtAction(nameof(Get), new { id = session.Id }, await LoadDtoAsync(session.Id, cancellationToken));
     }
 
@@ -90,12 +92,13 @@ public class SessionsController(AdisyonDbContext db, TimeProvider timeProvider) 
             CreatedAt = now,
             CreatedByUserId = User.GetUserId(),
         };
-        foreach (var item in request.Items)
+        foreach (var (item, position) in request.Items.Select((item, index) => (item, index)))
         {
             var product = products[item.ProductId];
             order.Items.Add(new OrderItem
             {
                 ProductId = product.Id,
+                Position = position,
                 // Ad ve fiyat sipariş anında kopyalanır (bkz. OrderItem açıklaması).
                 ProductName = product.Name,
                 UnitPrice = product.Price,
@@ -107,6 +110,10 @@ public class SessionsController(AdisyonDbContext db, TimeProvider timeProvider) 
         db.Orders.Add(order);
         session.UpdatedAt = now; // Sürümü (xmin) değiştirir; açık kapanış ekranları eskimiş olur.
         await db.SaveChangesAsync(cancellationToken);
+
+        // Mutfak ekranı yeni kartı anında görsün, masa planları yeni tutarı göstersin.
+        await notifier.OrderCreatedAsync(session.BranchId, await KitchenOrderDto.LoadAsync(db, order.Id, cancellationToken));
+        await notifier.TablesChangedAsync(session.BranchId);
 
         return (await LoadDtoAsync(session.Id, cancellationToken))!;
     }
@@ -146,6 +153,7 @@ public class SessionsController(AdisyonDbContext db, TimeProvider timeProvider) 
                 title: "Adisyon siz bakarken değişti. Güncel hâlini görüp tekrar deneyin.");
         }
 
+        await notifier.TablesChangedAsync(session.BranchId);
         return (await LoadDtoAsync(session.Id, cancellationToken))!;
     }
 
@@ -198,9 +206,8 @@ public record OrderDto(Guid Id, OrderSource Source, OrderStatus Status, DateTime
 {
     public static OrderDto From(Order o)
     {
-        // EF Core yeni kayıtlara zamana göre artan UUIDv7 kimlikleri verir; kimliğe göre sıralamak
-        // satırları garsonun girdiği sırayla gösterir.
-        var items = o.Items.OrderBy(i => i.Id)
+        // Satırlar garsonun girdiği sırayla (Position) gösterilir.
+        var items = o.Items.OrderBy(i => i.Position)
             .Select(i => new OrderItemDto(i.Id, i.ProductId, i.ProductName, i.UnitPrice, i.Quantity, i.Note)).ToList();
         return new OrderDto(o.Id, o.Source, o.Status, o.CreatedAt, items.Sum(i => i.UnitPrice * i.Quantity), items);
     }

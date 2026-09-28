@@ -7,6 +7,7 @@ import { useAuth } from '../auth/useAuth'
 import { canCheckout } from '../auth/roles'
 import { TopBar } from '../components/TopBar'
 import { formatMoney, formatTime } from '../lib/format'
+import { orderStatusBadge, orderStatusLabels } from '../lib/orderStatus'
 
 /** Sepette henüz mutfağa gönderilmemiş bir satır. */
 type CartLine = { key: string; product: Product; quantity: number; note: string }
@@ -110,6 +111,12 @@ export default function TableOrderPage() {
     },
   })
 
+  const markServed = useMutation({
+    mutationFn: (orderId: string) => api('POST', `/orders/${orderId}/status`, { status: 'Served' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['session', sessionId] }),
+    onError: (err) => setError(err.message),
+  })
+
   if (tables.isSuccess && !table) {
     return <p className="p-8 text-stone-600">Masa bulunamadı. <Link to="/garson" className="text-amber-700 underline">Masalara dön</Link></p>
   }
@@ -171,7 +178,22 @@ export default function TableOrderPage() {
                 <ul className="mt-2 divide-y divide-stone-100">
                   {session.data.orders.map((o) => (
                     <li key={o.id} className="py-2">
-                      <p className="text-xs text-stone-400">{formatTime(o.createdAt)}</p>
+                      <div className="mb-1 flex items-center gap-2">
+                        <span className="text-xs text-stone-400">{formatTime(o.createdAt)}</span>
+                        <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${orderStatusBadge[o.status]}`}>
+                          {orderStatusLabels[o.status]}
+                        </span>
+                        {o.status === 'Ready' && (
+                          <button
+                            type="button"
+                            disabled={markServed.isPending}
+                            onClick={() => markServed.mutate(o.id)}
+                            className="ml-auto rounded-lg bg-green-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-800"
+                          >
+                            Servis edildi
+                          </button>
+                        )}
+                      </div>
                       {o.items.map((i) => (
                         <div key={i.id} className="flex justify-between gap-2 text-sm">
                           <span className="text-stone-700">

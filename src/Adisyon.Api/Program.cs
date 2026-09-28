@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Adisyon.Api.Auth;
 using Adisyon.Api.Data;
+using Adisyon.Api.Realtime;
 using Adisyon.Api.Tenancy;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -47,6 +48,20 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             RoleClaimType = TokenService.ClaimNames.Role,
             ClockSkew = TimeSpan.FromMinutes(1),
         };
+        // Tarayıcılar WebSocket bağlantısında Authorization başlığı gönderemez; SignalR token'ı
+        // adrese "?access_token=..." olarak ekler. Bunu yalnızca hub adreslerinde kabul ediyoruz.
+        bearer.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var token = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = token;
+                }
+                return Task.CompletedTask;
+            },
+        };
     });
 
 builder.Services.AddAuthorization(options =>
@@ -76,6 +91,11 @@ builder.Services.AddControllers()
     // Enum'lar JSON'da sayı yerine metin olarak gider: "role": "Waiter".
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddProblemDetails();
+
+// Gerçek zamanlı bildirimler (mutfak ekranı, masa planı).
+builder.Services.AddSignalR()
+    .AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddSingleton<BranchNotifier>();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
@@ -114,5 +134,6 @@ app.Use(async (context, next) =>
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<BranchHub>(BranchHub.Path);
 
 app.Run();

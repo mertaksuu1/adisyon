@@ -22,8 +22,9 @@ export default function TablesPage() {
   const tables = useQuery({
     queryKey: ['tables'],
     queryFn: () => api<Table[]>('GET', '/tables'),
-    // Faz 2b'de SignalR gelince buna gerek kalmayacak; şimdilik 10 sn'de bir yenile.
-    refetchInterval: 10_000,
+    // Masa açılınca/kapanınca sunucu SignalR ile "TablesChanged" gönderir ve liste anında yenilenir.
+    // Dakikalık yenileme yalnızca açık kalan masaların sürelerini ("12 dk") güncel tutmak için.
+    refetchInterval: 60_000,
   })
 
   const active = tables.data?.filter((t) => t.isActive) ?? []

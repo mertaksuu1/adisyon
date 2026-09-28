@@ -91,6 +91,18 @@ export type Session = {
   orders: Order[]
 }
 
+/** Mutfak kartı (sunucudaki KitchenOrderDto). */
+export type KitchenOrder = {
+  id: string
+  sessionId: string
+  tableId: string
+  tableName: string
+  status: OrderStatus
+  createdAt: string
+  createdByName: string | null
+  items: OrderItem[]
+}
+
 export type NewOrderItem = {
   productId: string
   quantity: number

@@ -10,6 +10,8 @@ export default defineConfig({
     // Böylece tarayıcı tek adres görür, CORS ayarı gerekmez.
     proxy: {
       '/api': 'http://localhost:5260',
+      // SignalR: WebSocket bağlantısının da yönlendirilmesi için ws: true.
+      '/hubs': { target: 'http://localhost:5260', ws: true },
     },
   },
 })

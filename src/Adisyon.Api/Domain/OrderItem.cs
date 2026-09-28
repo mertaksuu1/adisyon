@@ -9,6 +9,12 @@ public class OrderItem : ITenantOwned
     public Guid ProductId { get; set; }
 
     /// <summary>
+    /// Siparişteki sıra (0, 1, 2...). Garsonun girdiği sırayı korumak için gerekli; aynı anda kaydedilen
+    /// satırların kimliklerinden (UUIDv7) sıra çıkarılamaz, çünkü milisaniye içinde rastgeledirler.
+    /// </summary>
+    public int Position { get; set; }
+
+    /// <summary>
     /// Ürün adı ve fiyatı sipariş anında kopyalanır ("snapshot"). Yarın menüde fiyat değişse bile
     /// bugünkü adisyon eski fiyatla kalmalı; yoksa geçmiş raporlar ve fişler bozulur.
     /// </summary>
