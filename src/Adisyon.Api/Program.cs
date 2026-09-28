@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Adisyon.Api.Auth;
 using Adisyon.Api.Data;
+using Adisyon.Api.Printing;
 using Adisyon.Api.Realtime;
 using Adisyon.Api.Tenancy;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -92,10 +93,14 @@ builder.Services.AddControllers()
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddProblemDetails();
 
-// Gerçek zamanlı bildirimler (mutfak ekranı, masa planı).
+// Gerçek zamanlı bildirimler: birden çok ekran varsa masa planları anında güncellenir.
 builder.Services.AddSignalR()
     .AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddSingleton<BranchNotifier>();
+
+// Mutfak fişi: yazıcı gelene kadar sanal yazıcı (önizleme). Faz 4'te gerçek ESC/POS yazıcı eklenecek.
+builder.Services.AddSingleton<PreviewPrinter>();
+builder.Services.AddSingleton<IKitchenPrinter>(services => services.GetRequiredService<PreviewPrinter>());
 builder.Services.AddOpenApi();
 
 var app = builder.Build();

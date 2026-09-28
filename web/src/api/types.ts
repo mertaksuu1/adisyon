@@ -91,16 +91,14 @@ export type Session = {
   orders: Order[]
 }
 
-/** Mutfak kartı (sunucudaki KitchenOrderDto). */
-export type KitchenOrder = {
-  id: string
-  sessionId: string
-  tableId: string
+/** Sanal yazıcının bastığı mutfak fişi (sunucudaki PrintedTicket). */
+export type PrintedTicket = {
+  orderId: string
+  branchId: string
   tableName: string
-  status: OrderStatus
-  createdAt: string
-  createdByName: string | null
-  items: OrderItem[]
+  printedAt: string
+  /** Kâğıda basılacak düz metin, 48 karakter genişliğinde. */
+  text: string
 }
 
 export type NewOrderItem = {

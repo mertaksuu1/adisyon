@@ -1,13 +1,10 @@
 import { createContext, useContext, useEffect, useRef } from 'react'
 import type { HubConnection } from '@microsoft/signalr'
-import type { KitchenOrder } from '../api/types'
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting'
 
 /** Sunucunun gönderdiği olaylar (sunucudaki RealtimeEvents ile aynı adlar). */
 export type RealtimeEvents = {
-  OrderCreated: (order: KitchenOrder) => void
-  OrderUpdated: (order: KitchenOrder) => void
   TablesChanged: () => void
 }
 
@@ -24,8 +21,8 @@ export function useConnectionStatus() {
 }
 
 /**
- * Bir sunucu olayını dinler. Örnek (mutfakta zil):
- *   useRealtimeEvent('OrderCreated', () => playBell())
+ * Bir sunucu olayını dinler. Örnek:
+ *   useRealtimeEvent('TablesChanged', () => ...)
  */
 export function useRealtimeEvent<E extends keyof RealtimeEvents>(event: E, handler: RealtimeEvents[E]) {
   const { connection } = useContext(RealtimeContext)

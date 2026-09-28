@@ -6,7 +6,8 @@ import { useAuth } from '../auth/useAuth'
 import { RealtimeContext, type ConnectionStatus } from './useRealtime'
 
 /**
- * Giriş yapılmışken sunucuyla sürekli açık bir SignalR bağlantısı tutar.
+ * Giriş yapılmışken sunucuyla sürekli açık bir SignalR bağlantısı tutar. Tek bilgisayarlı restoranda
+ * gerekmez; ikinci bir bilgisayar/tablet eklenirse masa planları birbirini anında görür.
  *
  * Temel fikir: sunucudan gelen olaylar yalnızca "şu değişti" sinyalidir; ekranlar veriyi her zaman
  * normal API'den çeker. Bağlantı kopup geri gelince TÜM veri yeniden çekilir. Böylece kopukluk
@@ -32,13 +33,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     conn.on('TablesChanged', () => {
       queryClient.invalidateQueries({ queryKey: ['tables'] })
       queryClient.invalidateQueries({ queryKey: ['session'] })
-    })
-    conn.on('OrderCreated', () => {
-      queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] })
-    })
-    conn.on('OrderUpdated', () => {
-      queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] })
-      queryClient.invalidateQueries({ queryKey: ['session'] })
+      queryClient.invalidateQueries({ queryKey: ['tickets'] })
     })
 
     conn.onreconnecting(() => setStatus('reconnecting'))

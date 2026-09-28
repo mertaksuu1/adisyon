@@ -5,7 +5,8 @@ using Microsoft.AspNetCore.SignalR;
 namespace Adisyon.Api.Realtime;
 
 /// <summary>
-/// Şube ekranlarının (garson, kasa, mutfak) bağlandığı gerçek zamanlı kanal.
+/// Şube ekranlarının bağlandığı gerçek zamanlı kanal. Tek bilgisayarlı restoranda gerekmez; ikinci bir
+/// bilgisayar veya tablet eklenirse masa planları birbirini anında görür.
 /// Ekranlar buraya yalnızca dinlemek için bağlanır; tüm işlemler normal HTTP uç noktalarıyla yapılır.
 /// Bağlanan her ekran, giriş yaptığı cihazın şubesine ait gruba eklenir.
 /// </summary>
@@ -27,12 +28,6 @@ public class BranchHub : Hub
 /// <summary>Ekranlara gönderilen olay adları. İstemci (web/src/realtime) aynı adları dinler.</summary>
 public static class RealtimeEvents
 {
-    /// <summary>Mutfağa yeni sipariş düştü. Yük: KitchenOrderDto.</summary>
-    public const string OrderCreated = "OrderCreated";
-
-    /// <summary>Bir siparişin durumu değişti (hazırlanıyor, hazır, servis edildi). Yük: KitchenOrderDto.</summary>
-    public const string OrderUpdated = "OrderUpdated";
-
     /// <summary>Masa planı değişti (masa açıldı/kapandı, tutar değişti). Yük yok; ekran listeyi yeniden çeker.</summary>
     public const string TablesChanged = "TablesChanged";
 }

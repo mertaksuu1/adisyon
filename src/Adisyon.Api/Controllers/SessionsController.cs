@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Adisyon.Api.Auth;
 using Adisyon.Api.Data;
 using Adisyon.Api.Domain;
+using Adisyon.Api.Printing;
 using Adisyon.Api.Realtime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,11 +13,16 @@ namespace Adisyon.Api.Controllers;
 
 /// <summary>
 /// Adisyon akışı: masayı aç → sipariş ekle (bir veya birçok kez) → hesabı kapat.
-/// Ödeme alma, iptal/ikram ve masa taşıma Faz 3'te eklenecek.
+/// Sipariş gönderilince mutfak fişi yazdırılır. Ödeme alma, iptal/ikram ve masa taşıma Faz 3'te eklenecek.
 /// </summary>
 [ApiController]
 [Route("api")]
-public class SessionsController(AdisyonDbContext db, TimeProvider timeProvider, BranchNotifier notifier) : ControllerBase
+public class SessionsController(
+    AdisyonDbContext db,
+    TimeProvider timeProvider,
+    BranchNotifier notifier,
+    IKitchenPrinter printer,
+    ILogger<SessionsController> logger) : ControllerBase
 {
     [HttpPost("tables/{tableId:guid}/session")]
     [Authorize(Roles = RoleNames.FrontOfHouse)]
@@ -111,8 +117,7 @@ public class SessionsController(AdisyonDbContext db, TimeProvider timeProvider, 
         session.UpdatedAt = now; // Sürümü (xmin) değiştirir; açık kapanış ekranları eskimiş olur.
         await db.SaveChangesAsync(cancellationToken);
 
-        // Mutfak ekranı yeni kartı anında görsün, masa planları yeni tutarı göstersin.
-        await notifier.OrderCreatedAsync(session.BranchId, await KitchenOrderDto.LoadAsync(db, order.Id, cancellationToken));
+        await PrintKitchenTicketAsync(order.Id, cancellationToken);
         await notifier.TablesChangedAsync(session.BranchId);
 
         return (await LoadDtoAsync(session.Id, cancellationToken))!;
@@ -155,6 +160,22 @@ public class SessionsController(AdisyonDbContext db, TimeProvider timeProvider, 
 
         await notifier.TablesChangedAsync(session.BranchId);
         return (await LoadDtoAsync(session.Id, cancellationToken))!;
+    }
+
+    /// <summary>
+    /// Mutfak fişini yazdırır. Yazıcı hatası siparişi geri almaz (sipariş zaten kaydedildi);
+    /// Faz 4'te "fiş yazdırılamadı, tekrar dene" uyarısı eklenecek.
+    /// </summary>
+    private async Task PrintKitchenTicketAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await printer.PrintAsync(await KitchenTicket.LoadAsync(db, orderId, cancellationToken), cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Mutfak fişi yazdırılamadı (sipariş {OrderId})", orderId);
+        }
     }
 
     private Task<TableSession?> FindInMyBranchAsync(Guid id, CancellationToken cancellationToken)

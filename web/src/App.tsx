@@ -3,12 +3,12 @@ import { Navigate, Route, Routes } from 'react-router'
 import type { UserRole } from './api/types'
 import { useAuth } from './auth/useAuth'
 import { homePathFor } from './auth/roles'
-import KitchenPage from './pages/KitchenPage'
 import PinPage from './pages/PinPage'
 import SetupPage from './pages/SetupPage'
 import StatusPage from './pages/StatusPage'
 import TableOrderPage from './pages/TableOrderPage'
 import TablesPage from './pages/TablesPage'
+import TicketsPage from './pages/TicketsPage'
 
 /**
  * Sayfa yönlendirmesi. Kapı bekçileri sırayla şunu sağlar:
@@ -23,7 +23,7 @@ export default function App() {
 
       <Route path="/garson" element={<RequireUser roles={['Owner', 'Manager', 'Waiter', 'Cashier']}><TablesPage /></RequireUser>} />
       <Route path="/garson/masa/:tableId" element={<RequireUser roles={['Owner', 'Manager', 'Waiter', 'Cashier']}><TableOrderPage /></RequireUser>} />
-      <Route path="/mutfak" element={<RequireUser roles={['Owner', 'Manager', 'Kitchen']}><KitchenPage /></RequireUser>} />
+      <Route path="/fisler" element={<RequireUser roles={['Owner', 'Manager', 'Kitchen']}><TicketsPage /></RequireUser>} />
 
       <Route path="*" element={<Home />} />
     </Routes>

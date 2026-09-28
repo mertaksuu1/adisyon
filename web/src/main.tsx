@@ -5,8 +5,6 @@ import { BrowserRouter } from 'react-router'
 import { ApiError } from './api/client'
 import App from './App.tsx'
 import { AuthProvider } from './auth/AuthContext'
-import { unlockSound } from './lib/bell'
-import { ReadyNotifications } from './realtime/ReadyNotifications'
 import { RealtimeProvider } from './realtime/RealtimeProvider'
 import './index.css'
 
@@ -20,9 +18,6 @@ const queryClient = new QueryClient({
   },
 })
 
-// Tarayıcılar ilk dokunuştan önce ses çalmaya izin vermez; ilk dokunuşta sesi sessizce aç.
-window.addEventListener('pointerdown', unlockSound, { once: true })
-
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
@@ -30,7 +25,6 @@ createRoot(document.getElementById('root')!).render(
         <AuthProvider>
           <RealtimeProvider>
             <App />
-            <ReadyNotifications />
           </RealtimeProvider>
         </AuthProvider>
       </BrowserRouter>
