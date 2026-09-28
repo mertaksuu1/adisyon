@@ -7,7 +7,7 @@
 - **Sade iş akışı (kullanıcı kararı):** Siparişler çoğunlukla tek bir bilgisayardan (kasa) girilir. Sipariş gönderilince mutfak yazıcısından fiş çıkar; yemek çıkınca mutfak kendi zilini çalar. Mutfak ekranı, "hazırlanıyor/hazır/servis edildi" adımları ve garson bildirimleri YOK; tekrar önermeden önce kullanıcıya sor.
 - Mutfak fişi: `Printing/KitchenTicket` (48 karakter, fiyatsız). Yazıcı gelene kadar `PreviewPrinter` (sanal yazıcı, `/fisler` sayfası). Yerel kurulumda API yazıcıya doğrudan gönderir; ayrı yazıcı ajanına gerek yok. SignalR yalnızca `TablesChanged` gönderir (ikinci ekran eklenirse masa planı güncel kalsın).
 - Yol haritası: Faz 0 temeller → 1 backend çekirdek → 2 sipariş akışı + mutfak fişi (sanal yazıcı) → 3 kasa/yönetim (ödeme, iptal/ikram, Z raporu) → 4 gerçek ESC/POS yazıcı → 5 AI (Claude API) + raporlar → 6 Windows paketleme + pilot → 7 bulut modülü ve satış.
-- Bilinçli olarak YOK: Avalonia, Redis, MediatR, ML.NET. Tüm ekranlar tek React uygulamasında (`/m/:qrToken`, `/mutfak`, `/kasa`, `/admin`).
+- Bilinçli olarak YOK: Avalonia, Redis, MediatR, ML.NET. Tüm ekranlar tek React uygulamasında: `/kurulum`, `/giris` (PIN), `/garson` (masa planı), `/garson/masa/:id` (sipariş + hesap kapatma), `/fisler` (mutfak fişleri); ileride `/admin`.
 - Çoklu kiracı: her tabloda `TenantId` ve EF Core global query filter (yerelde tek kiracı olur ama buluta geçiş için korunuyor). Uç noktalar varsayılan olarak giriş ister; açık olanlar `[AllowAnonymous]`.
 - API `http://localhost:5260`, web `http://localhost:5173`; Vite `/api` isteklerini API'ye proxy'ler.
 - Doğrulama: `dotnet test` (Docker açık olmalı, Testcontainers), `npm --prefix web run build`, `npm --prefix web run lint`.
