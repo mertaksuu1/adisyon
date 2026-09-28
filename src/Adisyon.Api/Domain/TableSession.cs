@@ -17,6 +17,12 @@ public class TableSession : ITenantOwned
     public DateTimeOffset? ClosedAt { get; set; }
 
     /// <summary>
+    /// Adisyona son sipariş eklendiği an. Her siparişte güncellenir; bu sayede satır değişir ve
+    /// Version (xmin) da değişir. Kapanıştaki "adisyon siz bakarken değişti" kontrolü buna dayanır.
+    /// </summary>
+    public DateTimeOffset UpdatedAt { get; set; }
+
+    /// <summary>
     /// Eşzamanlılık kontrolü: iki garson aynı adisyonu aynı anda değiştirirse ikincisi hata alır
     /// ve güncel veriyi yeniden yükler. PostgreSQL'in gizli "xmin" kolonuna eşlenir.
     /// </summary>

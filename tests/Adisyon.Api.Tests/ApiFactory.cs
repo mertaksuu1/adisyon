@@ -99,16 +99,42 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public async Task<(HttpClient Client, Guid TenantId)> CreateTenantAndLoginAsync(UserRole role)
     {
         var restaurant = await CreateRestaurantAsync();
-        await AddStaffAsync(restaurant.TenantId, role, "1234");
+        return (await LoginAsync(restaurant, role), restaurant.TenantId);
+    }
+
+    /// <summary>
+    /// Var olan restorana verilen rolde yeni bir personel ekler, kendi cihazını eşleştirip PIN'le girer.
+    /// Aynı restoranda birden çok personelle (ör. garson + kasa) test yazmak için.
+    /// </summary>
+    public async Task<HttpClient> LoginAsync(TestRestaurant restaurant, UserRole role)
+    {
+        var pin = Random.Shared.Next(0, 10_000).ToString("D4");
+        while (!await TryAddStaffAsync(restaurant.TenantId, role, pin))
+        {
+            pin = Random.Shared.Next(0, 10_000).ToString("D4"); // Nadiren aynı PIN denk gelirse yenisini seç.
+        }
         var deviceToken = await PairDeviceAsync(restaurant.PairingCode);
 
-        var response = await PinLoginAsync(deviceToken, "1234");
+        var response = await PinLoginAsync(deviceToken, pin);
         response.EnsureSuccessStatusCode();
         var login = await response.Content.ReadFromJsonAsync<LoginResponse>(JsonOptions);
 
         var client = CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login!.Token);
-        return (client, restaurant.TenantId);
+        return client;
+    }
+
+    private async Task<bool> TryAddStaffAsync(Guid tenantId, UserRole role, string pin)
+    {
+        try
+        {
+            await AddStaffAsync(tenantId, role, pin);
+            return true;
+        }
+        catch (DbUpdateException)
+        {
+            return false;
+        }
     }
 
     /// <summary>API enum'ları metin olarak gönderdiği için testler de aynı ayarla okumalı.</summary>

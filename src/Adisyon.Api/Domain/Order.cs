@@ -15,6 +15,9 @@ public class Order : ITenantOwned
     public OrderStatus Status { get; set; } = OrderStatus.New;
     public DateTimeOffset CreatedAt { get; set; }
 
+    /// <summary>Siparişi giren personel. QR siparişlerinde boştur. Garson bazlı raporlar için.</summary>
+    public Guid? CreatedByUserId { get; set; }
+
     public List<OrderItem> Items { get; set; } = [];
 }
 

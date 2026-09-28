@@ -16,4 +16,13 @@ public static class RoleNames
 
     /// <summary>Virgülle ayrılmış liste "bunlardan herhangi biri" demektir.</summary>
     public const string Management = Owner + "," + Manager;
+
+    /// <summary>Salon ekibi: masa açabilir ve sipariş girebilir (mutfak hariç herkes).</summary>
+    public const string FrontOfHouse = Owner + "," + Manager + "," + Waiter + "," + Cashier;
+
+    /// <summary>Menüye ürün ekleyip düzenleyebilenler (ör. günün özel yemeği). Kategoriler yalnızca yönetimde.</summary>
+    public const string MenuEditors = Owner + "," + Manager + "," + Waiter;
+
+    /// <summary>Hesap kapatabilenler. Z raporu gibi gün sonu işlemleri ise yalnızca Management'ta olacak.</summary>
+    public const string Checkout = Owner + "," + Manager + "," + Cashier;
 }

@@ -89,6 +89,8 @@ public class AdisyonDbContext(DbContextOptions<AdisyonDbContext> options, Tenant
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
             e.HasOne(x => x.TableSession).WithMany(s => s.Orders).HasForeignKey(x => x.TableSessionId)
                 .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<OrderItem>(e =>
