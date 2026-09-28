@@ -3,13 +3,12 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { api } from '../api/client'
 import type { Table } from '../api/types'
-import { useAuth } from '../auth/useAuth'
+import { HomeBackLink } from '../components/BackLink'
 import { TopBar } from '../components/TopBar'
 import { formatDuration, formatMoney } from '../lib/format'
 
 /** Masa planı: şubedeki tüm masalar, boş/dolu durumlarıyla. Masaya dokununca sipariş ekranı açılır. */
 export default function TablesPage() {
-  const { user } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const flash = (location.state as { flash?: string } | null)?.flash
@@ -34,7 +33,7 @@ export default function TablesPage() {
 
   return (
     <div className="min-h-screen bg-stone-100">
-      <TopBar title="Masalar" />
+      <TopBar title="Masalar" left={<HomeBackLink currentPath="/garson" />} />
 
       <main className="mx-auto max-w-6xl p-4">
         {flash && (
@@ -43,24 +42,9 @@ export default function TablesPage() {
           </p>
         )}
 
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm text-stone-600">
-            {tables.isSuccess && `${occupied} dolu · ${active.length - occupied} boş`}
-          </p>
-          {(user?.role === 'Owner' || user?.role === 'Manager') && (
-            <span className="flex gap-4">
-              <Link to="/yonetim" className="text-sm font-semibold text-amber-700 hover:underline">
-                Yönetim →
-              </Link>
-              <Link to="/rapor" className="text-sm font-semibold text-amber-700 hover:underline">
-                Gün sonu raporu →
-              </Link>
-              <Link to="/fisler" className="text-sm font-semibold text-amber-700 hover:underline">
-                Fişler →
-              </Link>
-            </span>
-          )}
-        </div>
+        <p className="mb-3 text-sm text-stone-600">
+          {tables.isSuccess && `${occupied} dolu · ${active.length - occupied} boş`}
+        </p>
 
         {tables.isPending && <p className="text-stone-500">Masalar yükleniyor…</p>}
         {tables.isError && <p className="text-red-700">{tables.error.message}</p>}

@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router'
 import { api } from '../api/client'
 import type { PrintedTicket } from '../api/types'
-import { useAuth } from '../auth/useAuth'
+import { HomeBackLink } from '../components/BackLink'
 import { TopBar } from '../components/TopBar'
 import { formatTime } from '../lib/format'
 
@@ -13,7 +12,6 @@ import { formatTime } from '../lib/format'
 const ticketKindLabels: Record<PrintedTicket['kind'], string> = { Kitchen: 'Mutfak', Bill: 'Hesap', Report: 'Rapor' }
 
 export default function TicketsPage() {
-  const { user } = useAuth()
   const tickets = useQuery({
     queryKey: ['tickets'],
     queryFn: () => api<PrintedTicket[]>('GET', '/print/recent'),
@@ -23,13 +21,7 @@ export default function TicketsPage() {
     <div className="min-h-screen bg-stone-200">
       <TopBar
         title="Fişler"
-        left={
-          user?.role !== 'Kitchen' && (
-            <Link to="/garson" className="rounded-xl bg-stone-100 px-3 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-200">
-              ← Masalar
-            </Link>
-          )
-        }
+        left={<HomeBackLink currentPath="/fisler" />}
       />
 
       <main className="mx-auto max-w-6xl p-4">

@@ -8,6 +8,7 @@ import { canCheckout } from '../auth/roles'
 import { ItemActionDialog } from '../components/ItemActionDialog'
 import { MoveTableDialog } from '../components/MoveTableDialog'
 import { PaymentDialog } from '../components/PaymentDialog'
+import { BackLink } from '../components/BackLink'
 import { TopBar } from '../components/TopBar'
 import { formatMoney, formatTime } from '../lib/format'
 
@@ -156,11 +157,7 @@ export default function TableOrderPage() {
     <div className="flex min-h-screen flex-col bg-stone-100">
       <TopBar
         title={table?.name ?? '…'}
-        left={
-          <Link to="/garson" className="rounded-xl bg-stone-100 px-3 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-200">
-            ← Masalar
-          </Link>
-        }
+        left={<BackLink to="/garson">Masalar</BackLink>}
       />
 
       <div className="flex flex-1 flex-col lg:flex-row">

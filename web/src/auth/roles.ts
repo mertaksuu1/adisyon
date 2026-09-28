@@ -1,7 +1,14 @@
 import type { UserRole } from '../api/types'
 
-/** Giriş sonrası her rolün açılış ekranı. */
+/** Sahip ve yönetici: ana menüden rapor, fiş ve yönetim bölümlerine geçer. */
+export const isManagement = (role: UserRole) => role === 'Owner' || role === 'Manager'
+
+/**
+ * Giriş sonrası her rolün açılış ekranı. Tek bölümü olan roller (garson, kasa, mutfak) ana menüyü
+ * atlayıp doğrudan işine gider; aradaki menü yalnızca fazladan dokunuş olurdu.
+ */
 export function homePathFor(role: UserRole) {
+  if (isManagement(role)) return '/ana-menu'
   return role === 'Kitchen' ? '/fisler' : '/garson'
 }
 

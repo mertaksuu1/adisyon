@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router'
 import { api } from '../api/client'
 import type { AdjustmentLine, ZReport } from '../api/types'
+import { HomeBackLink } from '../components/BackLink'
 import { TopBar } from '../components/TopBar'
 import { formatMoney, formatTime } from '../lib/format'
 
@@ -32,11 +32,7 @@ export default function ReportPage() {
     <div className="min-h-screen bg-stone-100">
       <TopBar
         title="Gün sonu raporu"
-        left={
-          <Link to="/garson" className="rounded-xl bg-stone-100 px-3 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-200">
-            ← Masalar
-          </Link>
-        }
+        left={<HomeBackLink currentPath="/rapor" />}
       />
 
       <main className="mx-auto max-w-4xl space-y-4 p-4">
