@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { PaymentMethod, Session } from '../api/types'
-import { formatMoney } from '../lib/format'
+import { formatMoney, parseAmount } from '../lib/format'
 
 type Props = {
   session: Session
@@ -123,13 +123,4 @@ function Row({ label, value, strong = false }: { label: string; value: string; s
 /** 460 → "460,00" (Türkçe klavyede virgül kullanılır). */
 function toInput(value: number) {
   return value.toFixed(2).replace('.', ',')
-}
-
-/** "1.250,50" veya "1250.5" → 1250.5; geçersizse null. */
-function parseAmount(text: string): number | null {
-  const trimmed = text.trim()
-  if (!trimmed) return null
-  const normalized = trimmed.includes(',') ? trimmed.replace(/\./g, '').replace(',', '.') : trimmed
-  const value = Number(normalized)
-  return Number.isFinite(value) ? Math.round(value * 100) / 100 : null
 }

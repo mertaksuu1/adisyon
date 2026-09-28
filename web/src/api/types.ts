@@ -154,3 +154,19 @@ export type AdjustmentLine = {
   amount: number
   byName: string | null
 }
+
+export type Branch = {
+  id: string
+  name: string
+  address: string | null
+}
+
+export type Device = {
+  id: string
+  name: string
+  isActive: boolean
+  createdAt: string
+  lastSeenAt: string | null
+  /** Şu an kullanılan cihaz (bağlantısı kesilemez). */
+  isCurrent: boolean
+}

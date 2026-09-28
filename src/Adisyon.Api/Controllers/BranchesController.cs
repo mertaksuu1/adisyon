@@ -11,6 +11,10 @@ namespace Adisyon.Api.Controllers;
 [Authorize(Roles = RoleNames.Management)]
 public class BranchesController(AdisyonDbContext db) : ControllerBase
 {
+    [HttpGet]
+    public Task<List<BranchDto>> List(CancellationToken cancellationToken) =>
+        db.Branches.OrderBy(b => b.Name).Select(b => new BranchDto(b.Id, b.Name, b.Address)).ToListAsync(cancellationToken);
+
     /// <summary>
     /// Şube için yeni bir eşleştirme kodu üretir ve bir kez gösterir. Eski kod geçersiz olur;
     /// daha önce eşleştirilmiş cihazlar çalışmaya devam eder.
@@ -33,3 +37,5 @@ public class BranchesController(AdisyonDbContext db) : ControllerBase
 }
 
 public record PairingCodeResponse(string PairingCode);
+
+public record BranchDto(Guid Id, string Name, string? Address);

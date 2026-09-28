@@ -50,11 +50,14 @@ public class TablesController(AdisyonDbContext db) : ControllerBase
     [Authorize(Roles = RoleNames.Management)]
     public async Task<ActionResult<TableDto>> Create(SaveTableRequest request, CancellationToken cancellationToken)
     {
+        var branchId = User.GetBranchId();
         var table = new DiningTable
         {
-            BranchId = User.GetBranchId(),
+            BranchId = branchId,
             Name = request.Name.Trim(),
-            SortOrder = request.SortOrder,
+            // Sıra verilmezse masa planının sonuna eklenir.
+            SortOrder = request.SortOrder ?? (await db.Tables.Where(t => t.BranchId == branchId)
+                .MaxAsync(t => (int?)t.SortOrder, cancellationToken) ?? 0) + 1,
             IsActive = request.IsActive,
             QrToken = DevDataSeeder.NewQrToken(),
         };
@@ -74,8 +77,16 @@ public class TablesController(AdisyonDbContext db) : ControllerBase
             return NotFound();
         }
 
+        // Açık adisyonu olan masa kullanım dışı bırakılırsa masa planından kaybolur ve hesap ulaşılamaz olur.
+        if (!request.IsActive && table.IsActive
+            && await db.TableSessions.AnyAsync(s => s.TableId == table.Id && s.Status == TableSessionStatus.Open, cancellationToken))
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict,
+                title: $"{table.Name} masasında açık adisyon var. Önce hesabı kapatın veya masayı taşıyın.");
+        }
+
         table.Name = request.Name.Trim();
-        table.SortOrder = request.SortOrder;
+        table.SortOrder = request.SortOrder ?? table.SortOrder;
         table.IsActive = request.IsActive;
         await db.SaveChangesAsync(cancellationToken);
         return TableDto.From(table);
@@ -84,7 +95,7 @@ public class TablesController(AdisyonDbContext db) : ControllerBase
 
 public record SaveTableRequest(
     [Required, MaxLength(100)] string Name,
-    int SortOrder = 0,
+    int? SortOrder = null,
     bool IsActive = true);
 
 /// <summary>OpenSession null ise masa boştur.</summary>

@@ -49,6 +49,9 @@ export default function TablesPage() {
           </p>
           {(user?.role === 'Owner' || user?.role === 'Manager') && (
             <span className="flex gap-4">
+              <Link to="/yonetim" className="text-sm font-semibold text-amber-700 hover:underline">
+                Yönetim →
+              </Link>
               <Link to="/rapor" className="text-sm font-semibold text-amber-700 hover:underline">
                 Gün sonu raporu →
               </Link>

@@ -36,7 +36,9 @@ public class MenuController(AdisyonDbContext db) : ControllerBase
     [Authorize(Roles = RoleNames.Management)]
     public async Task<ActionResult<CategoryDto>> CreateCategory(SaveCategoryRequest request, CancellationToken cancellationToken)
     {
-        var category = new Category { Name = request.Name.Trim(), SortOrder = request.SortOrder, IsActive = request.IsActive };
+        // Sıra verilmezse listenin sonuna eklenir.
+        var sortOrder = request.SortOrder ?? (await db.Categories.MaxAsync(c => (int?)c.SortOrder, cancellationToken) ?? 0) + 1;
+        var category = new Category { Name = request.Name.Trim(), SortOrder = sortOrder, IsActive = request.IsActive };
         db.Categories.Add(category);
         await db.SaveChangesAsync(cancellationToken);
         return CreatedAtAction(nameof(GetMenu), CategoryDto.From(category));
@@ -55,7 +57,7 @@ public class MenuController(AdisyonDbContext db) : ControllerBase
         }
 
         category.Name = request.Name.Trim();
-        category.SortOrder = request.SortOrder;
+        category.SortOrder = request.SortOrder ?? category.SortOrder;
         category.IsActive = request.IsActive;
         await db.SaveChangesAsync(cancellationToken);
         return CategoryDto.From(category);
@@ -70,7 +72,13 @@ public class MenuController(AdisyonDbContext db) : ControllerBase
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Kategori bulunamadı.");
         }
 
-        var product = new Product { Name = "" };
+        var product = new Product
+        {
+            Name = "",
+            // Sıra verilmezse kategorinin sonuna eklenir.
+            SortOrder = (await db.Products.Where(p => p.CategoryId == request.CategoryId)
+                .MaxAsync(p => (int?)p.SortOrder, cancellationToken) ?? 0) + 1,
+        };
         request.ApplyTo(product);
         db.Products.Add(product);
         await db.SaveChangesAsync(cancellationToken);
@@ -100,7 +108,7 @@ public class MenuController(AdisyonDbContext db) : ControllerBase
 
 public record SaveCategoryRequest(
     [Required, MaxLength(100)] string Name,
-    int SortOrder = 0,
+    int? SortOrder = null,
     bool IsActive = true);
 
 public record SaveProductRequest(
@@ -108,7 +116,7 @@ public record SaveProductRequest(
     [Required, MaxLength(200)] string Name,
     [Range(0, 99_999_999)] decimal Price,
     [MaxLength(1000)] string? Description = null,
-    int SortOrder = 0,
+    int? SortOrder = null,
     bool IsActive = true)
 {
     public void ApplyTo(Product product)
@@ -117,7 +125,7 @@ public record SaveProductRequest(
         product.Name = Name.Trim();
         product.Price = decimal.Round(Price, 2);
         product.Description = string.IsNullOrWhiteSpace(Description) ? null : Description.Trim();
-        product.SortOrder = SortOrder;
+        product.SortOrder = SortOrder ?? product.SortOrder; // verilmezse mevcut sıra korunur
         product.IsActive = IsActive;
     }
 }

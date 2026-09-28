@@ -64,7 +64,89 @@ public class UsersController(
 
         return CreatedAtAction(nameof(List), UserDto.From(user));
     }
+
+    /// <summary>Personelin adını, rolünü, şubesini veya aktifliğini değiştirir (işten ayrılan: pasif).</summary>
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<UserDto>> Update(Guid id, UpdateUserRequest request, CancellationToken cancellationToken)
+    {
+        var user = await db.Users.SingleOrDefaultAsync(u => u.Id == id, cancellationToken);
+        if (user is null)
+        {
+            return NotFound();
+        }
+        if (CannotManage(user) || (request.Role is UserRole.Owner or UserRole.Manager && !User.IsInRole(RoleNames.Owner)))
+        {
+            return Problem(statusCode: StatusCodes.Status403Forbidden,
+                title: "Sahip ve yönetici hesaplarını yalnızca işletme sahibi düzenleyebilir.");
+        }
+
+        var isSelf = user.Id == User.GetUserId();
+        if (isSelf && (!request.IsActive || request.Role != user.Role))
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict,
+                title: "Kendi hesabınızı pasife alamaz veya rolünüzü değiştiremezsiniz.");
+        }
+        if (request.BranchId is { } branchId && !await db.Branches.AnyAsync(b => b.Id == branchId, cancellationToken))
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Şube bulunamadı.");
+        }
+
+        // Restoranda en az bir aktif sahip kalmalı; yoksa kimse personel ve cihaz yönetemez.
+        var losesOwner = user.Role == UserRole.Owner && user.IsActive && (!request.IsActive || request.Role != UserRole.Owner);
+        if (losesOwner && !await db.Users.AnyAsync(u => u.Id != user.Id && u.Role == UserRole.Owner && u.IsActive, cancellationToken))
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict,
+                title: "Restoranda en az bir aktif işletme sahibi kalmalı.");
+        }
+
+        user.DisplayName = request.DisplayName.Trim();
+        user.Role = request.Role;
+        user.BranchId = request.BranchId;
+        user.IsActive = request.IsActive;
+        await db.SaveChangesAsync(cancellationToken);
+        return UserDto.From(user);
+    }
+
+    /// <summary>PIN'i değiştirir (ör. unutulduğunda). Yönetici kendi PIN'ini de değiştirebilir.</summary>
+    [HttpPut("{id:guid}/pin")]
+    public async Task<IActionResult> ChangePin(Guid id, ChangePinRequest request, CancellationToken cancellationToken)
+    {
+        var user = await db.Users.SingleOrDefaultAsync(u => u.Id == id, cancellationToken);
+        if (user is null)
+        {
+            return NotFound();
+        }
+        if (CannotManage(user) && user.Id != User.GetUserId())
+        {
+            return Problem(statusCode: StatusCodes.Status403Forbidden,
+                title: "Sahip ve yönetici PIN'lerini yalnızca işletme sahibi değiştirebilir.");
+        }
+
+        var pinHash = secretHasher.HashPin(user.TenantId, request.Pin);
+        if (await db.Users.AnyAsync(u => u.Id != user.Id && u.PinHash == pinHash, cancellationToken))
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict,
+                title: "Bu PIN restoranınızda başka bir personel tarafından kullanılıyor.");
+        }
+
+        user.PinHash = pinHash;
+        await db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>Yönetici, sahip veya başka bir yöneticinin hesabına dokunamaz.</summary>
+    private bool CannotManage(User target) =>
+        !User.IsInRole(RoleNames.Owner) && target.Role is UserRole.Owner or UserRole.Manager;
 }
+
+public record UpdateUserRequest(
+    [Required, MaxLength(100)] string DisplayName,
+    UserRole Role,
+    Guid? BranchId,
+    bool IsActive = true);
+
+public record ChangePinRequest(
+    [Required, RegularExpression(@"^\d{4}$", ErrorMessage = "PIN 4 rakamdan oluşmalı.")] string Pin);
 
 public record CreateUserRequest(
     [Required, MaxLength(100)] string DisplayName,
