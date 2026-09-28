@@ -1,5 +1,5 @@
+using Adisyon.Api.Data;
 using Microsoft.AspNetCore.Mvc;
-using Npgsql;
 
 namespace Adisyon.Api.Controllers;
 
@@ -8,27 +8,13 @@ namespace Adisyon.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/health")]
-public class HealthController(NpgsqlDataSource dataSource, ILogger<HealthController> logger) : ControllerBase
+public class HealthController(AdisyonDbContext db) : ControllerBase
 {
     [HttpGet]
     public async Task<HealthResponse> Get(CancellationToken cancellationToken)
     {
-        return new HealthResponse(Api: "ok", Database: await CheckDatabaseAsync(cancellationToken));
-    }
-
-    private async Task<string> CheckDatabaseAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await using var command = dataSource.CreateCommand("SELECT 1");
-            await command.ExecuteScalarAsync(cancellationToken);
-            return "ok";
-        }
-        catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
-        {
-            logger.LogWarning(ex, "Veritabanına bağlanılamadı");
-            return "unreachable";
-        }
+        var databaseOk = await db.Database.CanConnectAsync(cancellationToken);
+        return new HealthResponse(Api: "ok", Database: databaseOk ? "ok" : "unreachable");
     }
 }
 

@@ -36,7 +36,22 @@ npm run dev
 
 http://localhost:5173 adresindeki sayfada Web, API ve Veritabanı satırlarının üçü de "Çalışıyor" göstermeli.
 
+İlk açılışta API veritabanı tablolarını kendisi oluşturur ve "Demo Restoran" örnek verisini (8 masa, 10 ürünlük menü) yükler.
+
+## Veritabanı değişiklikleri (migration)
+
+`src/Adisyon.Api/Domain` altındaki bir sınıfı değiştirdikten sonra:
+
+```bash
+dotnet tool restore   # yalnızca ilk seferde
+dotnet ef migrations add DegisikliginAdi --project src/Adisyon.Api --output-dir Data/Migrations
+```
+
+API bir sonraki açılışta migration'ı uygular. Demo veriyi sıfırlamak için: `docker compose down -v && docker compose up -d`.
+
 ## Testler
+
+Testler Docker'da geçici bir PostgreSQL açar, bu yüzden Docker Desktop açık olmalı.
 
 ```bash
 dotnet test
