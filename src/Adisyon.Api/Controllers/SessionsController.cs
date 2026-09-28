@@ -198,7 +198,10 @@ public record OrderDto(Guid Id, OrderSource Source, OrderStatus Status, DateTime
 {
     public static OrderDto From(Order o)
     {
-        var items = o.Items.Select(i => new OrderItemDto(i.Id, i.ProductId, i.ProductName, i.UnitPrice, i.Quantity, i.Note)).ToList();
+        // EF Core yeni kayıtlara zamana göre artan UUIDv7 kimlikleri verir; kimliğe göre sıralamak
+        // satırları garsonun girdiği sırayla gösterir.
+        var items = o.Items.OrderBy(i => i.Id)
+            .Select(i => new OrderItemDto(i.Id, i.ProductId, i.ProductName, i.UnitPrice, i.Quantity, i.Note)).ToList();
         return new OrderDto(o.Id, o.Source, o.Status, o.CreatedAt, items.Sum(i => i.UnitPrice * i.Quantity), items);
     }
 }
