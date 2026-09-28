@@ -1,0 +1,22 @@
+# Geliştirme ortamı servisleri. Başlatmak için: docker compose up -d
+# Buradaki şifre yalnızca yerel geliştirme içindir; üretimde kullanılmaz.
+services:
+  postgres:
+    image: postgres:17
+    container_name: adisyon-postgres
+    environment:
+      POSTGRES_DB: adisyon
+      POSTGRES_USER: adisyon
+      POSTGRES_PASSWORD: adisyon_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adisyon -d adisyon"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:
