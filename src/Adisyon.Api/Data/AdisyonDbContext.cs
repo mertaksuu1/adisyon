@@ -21,6 +21,7 @@ public class AdisyonDbContext(DbContextOptions<AdisyonDbContext> options, Tenant
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Device> Devices => Set<Device>();
+    public DbSet<Payment> Payments => Set<Payment>();
 
     /// <summary>
     /// Sorgu filtresinde kullanılır. Kiracı yoksa Guid.Empty döner; hiçbir kayıt Guid.Empty'ye ait
@@ -112,6 +113,16 @@ public class AdisyonDbContext(DbContextOptions<AdisyonDbContext> options, Tenant
             e.HasIndex(x => new { x.TenantId, x.PinHash }).IsUnique();
             e.Property(x => x.Role).HasConversion<string>().HasMaxLength(20);
             e.HasOne<Branch>().WithMany().HasForeignKey(x => x.BranchId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Payment>(e =>
+        {
+            e.Property(x => x.Method).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Amount).HasPrecision(10, 2);
+            e.HasOne<TableSession>().WithMany(s => s.Payments).HasForeignKey(x => x.TableSessionId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

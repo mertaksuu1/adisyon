@@ -1,6 +1,7 @@
 using System.Text;
 using Adisyon.Api.Data;
 using Microsoft.EntityFrameworkCore;
+using static Adisyon.Api.Printing.TicketFormat;
 
 namespace Adisyon.Api.Printing;
 
@@ -8,21 +9,16 @@ namespace Adisyon.Api.Printing;
 /// Mutfak fişi: hangi masa, saat kaç, kim girdi, neler hazırlanacak. Fiyat yok; mutfağın işine yaramaz.
 /// </summary>
 public record KitchenTicket(
-    Guid OrderId,
     Guid BranchId,
     string TableName,
     DateTimeOffset CreatedAt,
     string? WaiterName,
     List<KitchenTicketLine> Lines)
 {
-    /// <summary>80 mm termal kâğıtta standart yazı tipiyle bir satıra sığan karakter sayısı.</summary>
-    public const int PaperWidth = 48;
-
     public static Task<KitchenTicket> LoadAsync(AdisyonDbContext db, Guid orderId, CancellationToken cancellationToken) =>
         db.Orders
             .Where(o => o.Id == orderId)
             .Select(o => new KitchenTicket(
-                o.Id,
                 o.TableSession!.BranchId,
                 o.TableSession.Table!.Name,
                 o.CreatedAt,
@@ -32,23 +28,21 @@ public record KitchenTicket(
                     .ToList()))
             .SingleAsync(cancellationToken);
 
-    /// <summary>
-    /// Fişin kâğıda basılacak düz metin hâli. Hem önizleme hem (Faz 4'te) gerçek yazıcı bunu kullanır.
-    /// </summary>
-    public string ToText(TimeZoneInfo timeZone)
+    public PrintJob ToPrintJob() => new(TicketKind.Kitchen, BranchId, TableName, ToText());
+
+    /// <summary>Fişin kâğıda basılacak düz metin hâli.</summary>
+    public string ToText()
     {
-        var line = new string('-', PaperWidth);
-        var time = TimeZoneInfo.ConvertTime(CreatedAt, timeZone).ToString("HH:mm");
         var text = new StringBuilder()
-            .AppendLine(new string('=', PaperWidth))
+            .AppendLine(DoubleLine)
             .AppendLine(Center("MUTFAK FİŞİ"))
-            .AppendLine(new string('=', PaperWidth))
-            .AppendLine(TableName.ToUpper(new System.Globalization.CultureInfo("tr-TR")).PadRight(PaperWidth - time.Length) + time);
+            .AppendLine(DoubleLine)
+            .AppendLine(LeftRight(Upper(TableName), Local(CreatedAt).ToString("HH:mm")));
         if (WaiterName is not null)
         {
             text.AppendLine($"Garson: {WaiterName}");
         }
-        text.AppendLine(line);
+        text.AppendLine(Line);
 
         foreach (var item in Lines)
         {
@@ -60,11 +54,8 @@ public record KitchenTicket(
             }
         }
 
-        return text.AppendLine(new string('=', PaperWidth)).ToString();
+        return text.AppendLine(DoubleLine).ToString();
     }
-
-    private static string Center(string value) =>
-        value.PadLeft((PaperWidth + value.Length) / 2).PadRight(PaperWidth);
 }
 
 public record KitchenTicketLine(int Quantity, string ProductName, string? Note);

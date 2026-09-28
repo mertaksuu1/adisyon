@@ -7,7 +7,7 @@ import { TopBar } from '../components/TopBar'
 import { formatTime } from '../lib/format'
 
 /**
- * Mutfak fişleri (sanal yazıcı). Yazıcı bağlanana kadar fişlerin kâğıtta nasıl görüneceğini gösterir.
+ * Fişler (sanal yazıcı): mutfak ve hesap fişleri. Yazıcı bağlanana kadar fişlerin kâğıtta nasıl görüneceğini gösterir.
  * Yeni sipariş gelince liste kendiliğinden yenilenir.
  */
 export default function TicketsPage() {
@@ -20,7 +20,7 @@ export default function TicketsPage() {
   return (
     <div className="min-h-screen bg-stone-200">
       <TopBar
-        title="Mutfak fişleri"
+        title="Fişler"
         left={
           user?.role !== 'Kitchen' && (
             <Link to="/garson" className="rounded-xl bg-stone-100 px-3 py-2.5 text-sm font-semibold text-stone-700 hover:bg-stone-200">
@@ -32,20 +32,20 @@ export default function TicketsPage() {
 
       <main className="mx-auto max-w-6xl p-4">
         <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-200">
-          Yazıcı henüz bağlı değil. Mutfak fişleri burada, kâğıtta çıkacakları hâliyle gösteriliyor.
+          Yazıcı henüz bağlı değil. Mutfak ve hesap fişleri burada, kâğıtta çıkacakları hâliyle gösteriliyor.
         </p>
 
         {tickets.isPending && <p className="text-stone-500">Yükleniyor…</p>}
         {tickets.isError && <p className="text-red-700">{tickets.error.message}</p>}
         {tickets.isSuccess && tickets.data.length === 0 && (
-          <p className="text-stone-500">Henüz fiş yok. Bir masaya sipariş gönderildiğinde burada görünecek.</p>
+          <p className="text-stone-500">Henüz fiş yok. Sipariş gönderildiğinde veya hesap fişi yazdırıldığında burada görünecek.</p>
         )}
 
         <ul className="flex flex-wrap items-start gap-4">
           {tickets.data?.map((t) => (
-            <li key={t.orderId}>
+            <li key={t.id}>
               <p className="mb-1 text-xs text-stone-500">
-                {t.tableName} · {formatTime(t.printedAt)}
+                {t.kind === 'Kitchen' ? 'Mutfak' : 'Hesap'} · {t.title} · {formatTime(t.printedAt)}
               </p>
               {/* 48 karakterlik termal fiş: sabit genişlikli yazı ve beyaz kâğıt şeridi */}
               <pre className="w-fit overflow-x-auto bg-white px-3 py-4 font-mono text-xs leading-snug text-black shadow-md">

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Adisyon.Api.Controllers;
 using Adisyon.Api.Domain;
+using Adisyon.Api.Printing;
 
 namespace Adisyon.Api.Tests;
 
@@ -26,7 +27,7 @@ public class SessionTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Full_flow_open_order_close()
+    public async Task Full_flow_open_order_pay()
     {
         var (_, waiter, cashier, table, kebap, ayran) = await SetUpAsync();
 
@@ -41,9 +42,11 @@ public class SessionTests(ApiFactory factory)
         var tables = await waiter.GetFromJsonAsync<List<TableDto>>("/api/tables", ApiFactory.JsonOptions);
         Assert.Equal(880m, tables!.Single().OpenSession!.Total);
 
-        var close = await cashier.PostAsJsonAsync($"/api/sessions/{session.Id}/close",
-            new CloseSessionRequest(afterSecond.Version), ApiFactory.JsonOptions);
-        Assert.Equal(HttpStatusCode.OK, close.StatusCode);
+        // Kasiyer "Nakit"e basar: kalanın tamamı ödenir ve masa kendiliğinden kapanır.
+        var pay = await cashier.PostAsJsonAsync($"/api/sessions/{session.Id}/payments",
+            new PayRequest(PaymentMethod.Cash, afterSecond.Version), ApiFactory.JsonOptions);
+        var paid = await pay.Content.ReadFromJsonAsync<SessionDto>(ApiFactory.JsonOptions);
+        Assert.Equal((TableSessionStatus.Closed, 880m, 0m), (paid!.Status, paid.Paid, paid.Remaining));
 
         tables = await waiter.GetFromJsonAsync<List<TableDto>>("/api/tables", ApiFactory.JsonOptions);
         Assert.Null(tables!.Single().OpenSession); // masa yeniden boş
@@ -69,7 +72,7 @@ public class SessionTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Closing_with_a_stale_version_is_rejected()
+    public async Task Paying_with_a_stale_version_is_rejected()
     {
         var (_, waiter, cashier, table, kebap, ayran) = await SetUpAsync();
         var session = await OpenAsync(waiter, table.Id);
@@ -77,10 +80,10 @@ public class SessionTests(ApiFactory factory)
 
         // Kasiyer ekrana bakarken garson bir ayran daha ekliyor.
         await AddOrderAsync(waiter, session.Id, new AddOrderItem(ayran.Id, 1));
-        var close = await cashier.PostAsJsonAsync($"/api/sessions/{session.Id}/close",
-            new CloseSessionRequest(seenByCashier.Version), ApiFactory.JsonOptions);
+        var pay = await cashier.PostAsJsonAsync($"/api/sessions/{session.Id}/payments",
+            new PayRequest(PaymentMethod.Card, seenByCashier.Version), ApiFactory.JsonOptions);
 
-        Assert.Equal(HttpStatusCode.Conflict, close.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, pay.StatusCode);
     }
 
     [Fact]
@@ -165,6 +168,86 @@ public class SessionTests(ApiFactory factory)
 
         Assert.Equal(HttpStatusCode.NotFound, read.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, order.StatusCode);
+    }
+
+    // ---------------- Ödeme ve hesap fişi ----------------
+
+    /// <summary>Masaya 1 kebap + 2 ayran (460 ₺) girilmiş hâlini döndürür.</summary>
+    private async Task<(HttpClient Owner, HttpClient Waiter, HttpClient Cashier, SessionDto Session)> OpenWithOrderAsync()
+    {
+        var (owner, waiter, cashier, table, kebap, ayran) = await SetUpAsync();
+        var session = await OpenAsync(waiter, table.Id);
+        session = await AddOrderAsync(waiter, session.Id, new AddOrderItem(kebap.Id, 1), new AddOrderItem(ayran.Id, 1));
+        session = await AddOrderAsync(waiter, session.Id, new AddOrderItem(ayran.Id, 1));
+        return (owner, waiter, cashier, session);
+    }
+
+    private static Task<HttpResponseMessage> PayAsync(HttpClient client, SessionDto session, PaymentMethod method, decimal? amount = null) =>
+        client.PostAsJsonAsync($"/api/sessions/{session.Id}/payments", new PayRequest(method, session.Version, amount), ApiFactory.JsonOptions);
+
+    [Fact]
+    public async Task Split_payment_keeps_table_open_until_fully_paid()
+    {
+        var (_, _, cashier, session) = await OpenWithOrderAsync();
+
+        var afterCard = await (await PayAsync(cashier, session, PaymentMethod.Card, 300m)).Content.ReadFromJsonAsync<SessionDto>(ApiFactory.JsonOptions);
+        Assert.Equal((TableSessionStatus.Open, 300m, 160m), (afterCard!.Status, afterCard.Paid, afterCard.Remaining));
+
+        var afterCash = await (await PayAsync(cashier, afterCard, PaymentMethod.Cash)).Content.ReadFromJsonAsync<SessionDto>(ApiFactory.JsonOptions);
+        Assert.Equal((TableSessionStatus.Closed, 460m, 0m), (afterCash!.Status, afterCash.Paid, afterCash.Remaining));
+        Assert.Equal([PaymentMethod.Card, PaymentMethod.Cash], afterCash.Payments.Select(p => p.Method));
+    }
+
+    [Fact]
+    public async Task Paying_more_than_remaining_is_rejected()
+    {
+        var (_, _, cashier, session) = await OpenWithOrderAsync();
+
+        var response = await PayAsync(cashier, session, PaymentMethod.Cash, 500m);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Waiter_cannot_take_payment()
+    {
+        var (_, waiter, _, session) = await OpenWithOrderAsync();
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await PayAsync(waiter, session, PaymentMethod.Cash)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Unpaid_table_cannot_be_closed_but_empty_one_can()
+    {
+        var (_, waiter, cashier, table, _, _) = await SetUpAsync();
+        var empty = await OpenAsync(waiter, table.Id);
+
+        var closeEmpty = await cashier.PostAsJsonAsync($"/api/sessions/{empty.Id}/close", new CloseSessionRequest(empty.Version), ApiFactory.JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, closeEmpty.StatusCode);
+
+        var (_, _, cashier2, unpaid) = await OpenWithOrderAsync();
+        var closeUnpaid = await cashier2.PostAsJsonAsync($"/api/sessions/{unpaid.Id}/close", new CloseSessionRequest(unpaid.Version), ApiFactory.JsonOptions);
+        Assert.Equal(HttpStatusCode.Conflict, closeUnpaid.StatusCode);
+    }
+
+    [Fact]
+    public async Task Bill_ticket_groups_items_and_shows_payments_and_legal_notice()
+    {
+        var (owner, waiter, cashier, session) = await OpenWithOrderAsync();
+        (await PayAsync(cashier, session, PaymentMethod.Card, 100m)).EnsureSuccessStatusCode();
+
+        var print = await waiter.PostAsync($"/api/sessions/{session.Id}/print-bill", null);
+
+        Assert.Equal(HttpStatusCode.NoContent, print.StatusCode);
+        var bill = (await owner.GetFromJsonAsync<List<PrintedTicket>>("/api/print/recent", ApiFactory.JsonOptions))!
+            .First(t => t.Kind == TicketKind.Bill);
+        var lines = bill.Text.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
+        Assert.Contains(lines, l => l.StartsWith("2 x Ayran") && l.EndsWith("80,00")); // iki siparişteki ayranlar tek satırda
+        Assert.Contains(lines, l => l.StartsWith("TOPLAM") && l.EndsWith("460,00"));
+        Assert.Contains(lines, l => l.StartsWith("Ödenen (Kart)") && l.EndsWith("100,00"));
+        Assert.Contains(lines, l => l.StartsWith("KALAN") && l.EndsWith("360,00"));
+        Assert.Contains("MALİ DEĞERİ YOKTUR", bill.Text);
+        Assert.All(lines, l => Assert.True(l.Length <= TicketFormat.PaperWidth, $"Satır kâğıda sığmıyor: '{l}'"));
     }
 
     private static async Task<SessionDto> OpenAsync(HttpClient client, Guid tableId)

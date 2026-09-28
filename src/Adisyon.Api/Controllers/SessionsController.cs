@@ -13,7 +13,8 @@ namespace Adisyon.Api.Controllers;
 
 /// <summary>
 /// Adisyon akışı: masayı aç → sipariş ekle (bir veya birçok kez) → hesabı kapat.
-/// Sipariş gönderilince mutfak fişi yazdırılır. Ödeme alma, iptal/ikram ve masa taşıma Faz 3'te eklenecek.
+/// Sipariş gönderilince mutfak fişi yazdırılır. Ödeme tamamlanınca adisyon kendiliğinden kapanır.
+/// İptal/ikram ve masa taşıma Faz 3b'de eklenecek.
 /// </summary>
 [ApiController]
 [Route("api")]
@@ -21,7 +22,7 @@ public class SessionsController(
     AdisyonDbContext db,
     TimeProvider timeProvider,
     BranchNotifier notifier,
-    IKitchenPrinter printer,
+    IPrinter printer,
     ILogger<SessionsController> logger) : ControllerBase
 {
     [HttpPost("tables/{tableId:guid}/session")]
@@ -124,14 +125,15 @@ public class SessionsController(
     }
 
     /// <summary>
-    /// Hesabı kapatır. İstemci adisyonu hangi sürümde gördüyse onu gönderir; o arada yeni sipariş
-    /// eklendiyse kapanış reddedilir ve kasiyer güncel tutarı görmek zorunda kalır.
+    /// Ödeme alır. Amount boşsa kalan tutarın tamamı ödenir. Kalan sıfırlanınca adisyon kapanır ve masa boşalır.
+    /// İstemci adisyonu hangi sürümde gördüyse onu gönderir; o arada yeni sipariş eklendiyse ödeme reddedilir
+    /// ve kasiyer güncel tutarı görmek zorunda kalır.
     /// </summary>
-    [HttpPost("sessions/{id:guid}/close")]
+    [HttpPost("sessions/{id:guid}/payments")]
     [Authorize(Roles = RoleNames.Checkout)]
-    public async Task<ActionResult<SessionDto>> Close(Guid id, CloseSessionRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<SessionDto>> Pay(Guid id, PayRequest request, CancellationToken cancellationToken)
     {
-        var session = await FindInMyBranchAsync(id, cancellationToken);
+        var session = await FindWithMoneyAsync(id, cancellationToken);
         if (session is null)
         {
             return NotFound();
@@ -140,27 +142,127 @@ public class SessionsController(
         {
             return Problem(statusCode: StatusCodes.Status409Conflict, title: "Bu adisyon zaten kapatılmış.");
         }
-
-        // EF'e "bu satırı istemcinin gördüğü sürümle güncelle" diyoruz. Veritabanındaki sürüm farklıysa
-        // UPDATE hiçbir satırı etkilemez ve EF DbUpdateConcurrencyException fırlatır.
-        db.Entry(session).Property(s => s.Version).OriginalValue = request.Version;
-        var now = timeProvider.GetUtcNow();
-        session.Status = TableSessionStatus.Closed;
-        session.ClosedAt = now;
-        session.UpdatedAt = now;
-        try
+        if (session.Version != request.Version)
         {
-            await db.SaveChangesAsync(cancellationToken);
+            return StaleSession();
         }
-        catch (DbUpdateConcurrencyException)
+
+        var remaining = SessionMoney.Remaining(session);
+        var amount = decimal.Round(request.Amount ?? remaining, 2);
+        if (amount <= 0)
         {
-            return Problem(statusCode: StatusCodes.Status409Conflict,
-                title: "Adisyon siz bakarken değişti. Güncel hâlini görüp tekrar deneyin.");
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Ödeme tutarı sıfırdan büyük olmalı.");
+        }
+        if (amount > remaining)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest,
+                title: $"Ödeme, kalan tutardan ({remaining:N2} ₺) fazla olamaz. Para üstünü ekrandan hesaplayın.");
+        }
+
+        var now = timeProvider.GetUtcNow();
+        session.Payments.Add(new Payment
+        {
+            TableSessionId = session.Id,
+            Method = request.Method,
+            Amount = amount,
+            CreatedAt = now,
+            CreatedByUserId = User.GetUserId(),
+        });
+        session.UpdatedAt = now;
+        if (amount == remaining)
+        {
+            // Hesap tamamen ödendi: masa boşalır.
+            session.Status = TableSessionStatus.Closed;
+            session.ClosedAt = now;
+        }
+
+        if (!await TrySaveWithVersionAsync(session, request.Version, cancellationToken))
+        {
+            return StaleSession();
         }
 
         await notifier.TablesChangedAsync(session.BranchId);
         return (await LoadDtoAsync(session.Id, cancellationToken))!;
     }
+
+    /// <summary>
+    /// Ödemesi tamamlanmış ya da hiç ürünü olmayan adisyonu kapatır (ör. müşteri sipariş vermeden kalktı).
+    /// Ödenmemiş tutar varsa kapatılamaz; önce ödeme alınmalı.
+    /// </summary>
+    [HttpPost("sessions/{id:guid}/close")]
+    [Authorize(Roles = RoleNames.Checkout)]
+    public async Task<ActionResult<SessionDto>> Close(Guid id, CloseSessionRequest request, CancellationToken cancellationToken)
+    {
+        var session = await FindWithMoneyAsync(id, cancellationToken);
+        if (session is null)
+        {
+            return NotFound();
+        }
+        if (session.Status != TableSessionStatus.Open)
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict, title: "Bu adisyon zaten kapatılmış.");
+        }
+        if (session.Version != request.Version)
+        {
+            return StaleSession();
+        }
+        if (SessionMoney.Remaining(session) > 0)
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict,
+                title: $"Ödenmemiş {SessionMoney.Remaining(session):N2} ₺ var. Önce ödeme alın.");
+        }
+
+        var now = timeProvider.GetUtcNow();
+        session.Status = TableSessionStatus.Closed;
+        session.ClosedAt = now;
+        session.UpdatedAt = now;
+        if (!await TrySaveWithVersionAsync(session, request.Version, cancellationToken))
+        {
+            return StaleSession();
+        }
+
+        await notifier.TablesChangedAsync(session.BranchId);
+        return (await LoadDtoAsync(session.Id, cancellationToken))!;
+    }
+
+    /// <summary>Müşteriye verilecek hesap fişini (adisyon pusulası) yazdırır.</summary>
+    [HttpPost("sessions/{id:guid}/print-bill")]
+    [Authorize(Roles = RoleNames.FrontOfHouse)]
+    public async Task<IActionResult> PrintBill(Guid id, CancellationToken cancellationToken)
+    {
+        var session = await FindWithMoneyAsync(id, cancellationToken);
+        if (session is null)
+        {
+            return NotFound();
+        }
+
+        var branch = await db.Branches.SingleAsync(b => b.Id == session.BranchId, cancellationToken);
+        var tenant = await db.Tenants.SingleAsync(t => t.Id == session.TenantId, cancellationToken);
+        await printer.PrintAsync(BillTicket.Create(tenant.Name, branch.Name, session, timeProvider.GetUtcNow()), cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// "Bu satırı istemcinin gördüğü sürümle güncelle": veritabanındaki sürüm farklıysa UPDATE hiçbir satırı
+    /// etkilemez ve EF DbUpdateConcurrencyException fırlatır. İki kasiyer aynı anda ödeme alırsa biri reddedilir.
+    /// </summary>
+    private async Task<bool> TrySaveWithVersionAsync(TableSession session, uint version, CancellationToken cancellationToken)
+    {
+        db.Entry(session).Property(s => s.Version).OriginalValue = version;
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return false;
+        }
+    }
+
+    private ObjectResult StaleSession() =>
+        Problem(statusCode: StatusCodes.Status409Conflict,
+            title: "Adisyon siz bakarken değişti. Güncel hâlini görüp tekrar deneyin.");
 
     /// <summary>
     /// Mutfak fişini yazdırır. Yazıcı hatası siparişi geri almaz (sipariş zaten kaydedildi);
@@ -170,7 +272,7 @@ public class SessionsController(
     {
         try
         {
-            await printer.PrintAsync(await KitchenTicket.LoadAsync(db, orderId, cancellationToken), cancellationToken);
+            await printer.PrintAsync((await KitchenTicket.LoadAsync(db, orderId, cancellationToken)).ToPrintJob(), cancellationToken);
         }
         catch (Exception ex)
         {
@@ -184,12 +286,26 @@ public class SessionsController(
         return db.TableSessions.SingleOrDefaultAsync(s => s.Id == id && s.BranchId == branchId, cancellationToken);
     }
 
+    /// <summary>Tutar hesabı gereken işlemler için siparişleri ve ödemeleriyle birlikte yükler.</summary>
+    private Task<TableSession?> FindWithMoneyAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var branchId = User.GetBranchId();
+        return db.TableSessions
+            .Include(s => s.Table)
+            .Include(s => s.Orders).ThenInclude(o => o.Items)
+            .Include(s => s.Payments)
+            .AsSplitQuery()
+            .SingleOrDefaultAsync(s => s.Id == id && s.BranchId == branchId, cancellationToken);
+    }
+
     private async Task<SessionDto?> LoadDtoAsync(Guid id, CancellationToken cancellationToken)
     {
         var branchId = User.GetBranchId();
         var session = await db.TableSessions.AsNoTracking()
             .Include(s => s.Table)
             .Include(s => s.Orders).ThenInclude(o => o.Items)
+            .Include(s => s.Payments)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(s => s.Id == id && s.BranchId == branchId, cancellationToken);
         return session is null ? null : SessionDto.From(session);
     }
@@ -204,6 +320,9 @@ public record AddOrderItem(
 
 public record CloseSessionRequest(uint Version);
 
+/// <summary>Amount boşsa kalan tutarın tamamı ödenir.</summary>
+public record PayRequest(PaymentMethod Method, uint Version, [Range(0.01, 99_999_999)] decimal? Amount = null);
+
 public record SessionDto(
     Guid Id,
     Guid TableId,
@@ -212,16 +331,20 @@ public record SessionDto(
     DateTimeOffset OpenedAt,
     DateTimeOffset? ClosedAt,
     decimal Total,
+    decimal Paid,
+    decimal Remaining,
     uint Version,
-    List<OrderDto> Orders)
+    List<OrderDto> Orders,
+    List<PaymentDto> Payments)
 {
-    public static SessionDto From(TableSession s)
-    {
-        var orders = s.Orders.OrderBy(o => o.CreatedAt).Select(OrderDto.From).ToList();
-        var total = orders.Where(o => o.Status != OrderStatus.Cancelled).Sum(o => o.Total);
-        return new SessionDto(s.Id, s.TableId, s.Table!.Name, s.Status, s.OpenedAt, s.ClosedAt, total, s.Version, orders);
-    }
+    public static SessionDto From(TableSession s) => new(
+        s.Id, s.TableId, s.Table!.Name, s.Status, s.OpenedAt, s.ClosedAt,
+        SessionMoney.Total(s), SessionMoney.Paid(s), SessionMoney.Remaining(s), s.Version,
+        s.Orders.OrderBy(o => o.CreatedAt).Select(OrderDto.From).ToList(),
+        s.Payments.OrderBy(p => p.CreatedAt).Select(p => new PaymentDto(p.Id, p.Method, p.Amount, p.CreatedAt)).ToList());
 }
+
+public record PaymentDto(Guid Id, PaymentMethod Method, decimal Amount, DateTimeOffset CreatedAt);
 
 public record OrderDto(Guid Id, OrderSource Source, OrderStatus Status, DateTimeOffset CreatedAt, decimal Total, List<OrderItemDto> Items)
 {

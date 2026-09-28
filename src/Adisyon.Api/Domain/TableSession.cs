@@ -29,6 +29,7 @@ public class TableSession : ITenantOwned
     public uint Version { get; set; }
 
     public List<Order> Orders { get; set; } = [];
+    public List<Payment> Payments { get; set; } = [];
 }
 
 public enum TableSessionStatus

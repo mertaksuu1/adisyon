@@ -79,6 +79,15 @@ export type Order = {
   items: OrderItem[]
 }
 
+export type PaymentMethod = 'Cash' | 'Card'
+
+export type Payment = {
+  id: string
+  method: PaymentMethod
+  amount: number
+  createdAt: string
+}
+
 export type Session = {
   id: string
   tableId: string
@@ -87,15 +96,20 @@ export type Session = {
   openedAt: string
   closedAt: string | null
   total: number
+  paid: number
+  remaining: number
   version: number
   orders: Order[]
+  payments: Payment[]
 }
 
-/** Sanal yazıcının bastığı mutfak fişi (sunucudaki PrintedTicket). */
+/** Sanal yazıcının bastığı fiş (sunucudaki PrintedTicket). */
 export type PrintedTicket = {
-  orderId: string
+  id: string
+  kind: 'Kitchen' | 'Bill'
   branchId: string
-  tableName: string
+  /** Masa adı. */
+  title: string
   printedAt: string
   /** Kâğıda basılacak düz metin, 48 karakter genişliğinde. */
   text: string

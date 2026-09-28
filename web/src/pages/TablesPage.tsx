@@ -49,7 +49,7 @@ export default function TablesPage() {
           </p>
           {(user?.role === 'Owner' || user?.role === 'Manager') && (
             <Link to="/fisler" className="text-sm font-semibold text-amber-700 hover:underline">
-              Mutfak fişleri →
+              Fişler →
             </Link>
           )}
         </div>

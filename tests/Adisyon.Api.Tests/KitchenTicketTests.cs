@@ -52,7 +52,7 @@ public class KitchenTicketTests(ApiFactory factory)
         var itemsStart = lines.IndexOf("1 x Karışık Izgara");
         Assert.Equal(["1 x Karışık Izgara", "    >> Soğansız", "2 x Ezogelin Çorbası"], lines.Skip(itemsStart).Take(3));
         Assert.DoesNotContain("520", ticket.Text);
-        Assert.All(lines, l => Assert.True(l.Length <= KitchenTicket.PaperWidth, $"Satır kâğıda sığmıyor: '{l}'"));
+        Assert.All(lines, l => Assert.True(l.Length <= TicketFormat.PaperWidth, $"Satır kâğıda sığmıyor: '{l}'"));
     }
 
     [Fact]

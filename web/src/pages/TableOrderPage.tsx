@@ -5,6 +5,7 @@ import { api, ApiError } from '../api/client'
 import type { Category, NewOrderItem, Product, Session, Table } from '../api/types'
 import { useAuth } from '../auth/useAuth'
 import { canCheckout } from '../auth/roles'
+import { PaymentDialog } from '../components/PaymentDialog'
 import { TopBar } from '../components/TopBar'
 import { formatMoney, formatTime } from '../lib/format'
 
@@ -96,18 +97,37 @@ export default function TableOrderPage() {
     onError: (err) => setError(err.message),
   })
 
-  const closeBill = useMutation({
+  const [paying, setPaying] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+
+  const afterPayment = (paid: Session) => {
+    setPaying(false)
+    queryClient.invalidateQueries({ queryKey: ['tables'] })
+    if (paid.status === 'Closed') {
+      navigate('/garson', { state: { flash: `${table?.name}: ödeme alındı, masa kapandı.` } })
+    } else {
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] })
+      setNotice(`Ödeme alındı. Kalan: ${formatMoney(paid.remaining)}`)
+    }
+  }
+
+  const printBill = useMutation({
+    mutationFn: () => api('POST', `/sessions/${sessionId}/print-bill`),
+    onSuccess: () => {
+      setNotice('Hesap fişi yazdırıldı.')
+      queryClient.invalidateQueries({ queryKey: ['tickets'] })
+    },
+    onError: (err) => setError(err.message),
+  })
+
+  // Hiç ürün girilmemiş (0 ₺) adisyonu kapatmak için: ör. müşteri sipariş vermeden kalktı.
+  const closeEmpty = useMutation({
     mutationFn: (s: Session) => api<Session>('POST', `/sessions/${s.id}/close`, { version: s.version }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tables'] })
-      navigate('/garson', { state: { flash: `${table?.name}: hesap kapatıldı.` } })
+      navigate('/garson', { state: { flash: `${table?.name}: masa boşaltıldı.` } })
     },
-    onError: (err) => {
-      setError(err.message)
-      // Sürüm çakışması: güncel adisyonu yeniden yükle ki kasiyer yeni tutarı görsün.
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] })
-      queryClient.invalidateQueries({ queryKey: ['tables'] })
-    },
+    onError: (err) => setError(err.message),
   })
 
   if (tables.isSuccess && !table) {
@@ -188,6 +208,18 @@ export default function TableOrderPage() {
                   <span>Adisyon toplamı</span>
                   <span className="tabular-nums">{formatMoney(session.data.total)}</span>
                 </p>
+                {session.data.payments.map((p) => (
+                  <p key={p.id} className="flex justify-between text-sm text-green-700">
+                    <span>Ödenen ({p.method === 'Cash' ? 'Nakit' : 'Kart'}) · {formatTime(p.createdAt)}</span>
+                    <span className="tabular-nums">−{formatMoney(p.amount)}</span>
+                  </p>
+                ))}
+                {session.data.paid > 0 && (
+                  <p className="flex justify-between font-bold text-stone-900">
+                    <span>Kalan</span>
+                    <span className="tabular-nums">{formatMoney(session.data.remaining)}</span>
+                  </p>
+                )}
               </section>
             )}
 
@@ -226,6 +258,7 @@ export default function TableOrderPage() {
             )}
 
             {error && <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{error}</p>}
+            {notice && !error && <p className="mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800" role="status">{notice}</p>}
           </div>
 
           <div className="sticky bottom-0 space-y-2 border-t border-stone-200 bg-white p-4">
@@ -242,25 +275,64 @@ export default function TableOrderPage() {
               <span className="tabular-nums">{formatMoney(cartTotal)}</span>
             </button>
 
-            {user && canCheckout(user.role) && session.data && cart.length === 0 && (
-              <button
-                type="button"
-                disabled={closeBill.isPending}
-                onClick={() => {
-                  const s = session.data
-                  if (confirm(`${table?.name} hesabı ${formatMoney(s.total)} olarak kapatılsın mı?`)) {
+            {session.data && cart.length === 0 && (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={printBill.isPending || session.data.total === 0}
+                  onClick={() => {
                     setError(null)
-                    closeBill.mutate(s)
-                  }
-                }}
-                className="w-full rounded-xl bg-stone-900 py-3 font-semibold text-white transition hover:bg-stone-700 disabled:opacity-50"
-              >
-                Hesabı kapat · {formatMoney(session.data.total)}
-              </button>
+                    printBill.mutate()
+                  }}
+                  className={`rounded-xl bg-stone-100 py-3 font-semibold text-stone-800 transition hover:bg-stone-200 disabled:opacity-40 ${
+                    user && canCheckout(user.role) ? '' : 'col-span-2'
+                  }`}
+                >
+                  Hesap fişi
+                </button>
+                {user && canCheckout(user.role) &&
+                  (session.data.remaining > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null)
+                        setNotice(null)
+                        setPaying(true)
+                      }}
+                      className="rounded-xl bg-stone-900 py-3 font-semibold text-white transition hover:bg-stone-700"
+                    >
+                      Ödeme al
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={closeEmpty.isPending}
+                      onClick={() => closeEmpty.mutate(session.data)}
+                      className="rounded-xl bg-stone-900 py-3 font-semibold text-white transition hover:bg-stone-700 disabled:opacity-50"
+                    >
+                      Masayı boşalt
+                    </button>
+                  ))}
+              </div>
             )}
           </div>
         </aside>
       </div>
+
+      {paying && session.data && (
+        <PaymentDialog
+          session={session.data}
+          onClose={() => setPaying(false)}
+          onPaid={afterPayment}
+          onError={(message) => {
+            // Ör. sürüm çakışması: pencereyi kapat, güncel adisyonu göster.
+            setPaying(false)
+            setError(message)
+            queryClient.invalidateQueries({ queryKey: ['session', sessionId] })
+            queryClient.invalidateQueries({ queryKey: ['tables'] })
+          }}
+        />
+      )}
     </div>
   )
 }
