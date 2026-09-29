@@ -7,7 +7,7 @@ namespace Adisyon.Api.Hosting;
 /// <summary>
 /// Restoran bilgisayarına kurulan sürümün ayarları. Geliştirme ve test ortamında devreye girmez.
 ///
-/// Veri klasörü (varsayılan: programın yanındaki "data" klasörü):
+/// Veri klasörü (Windows'ta C:\ProgramData\Adisyon, diğer sistemlerde programın yanındaki "data"):
 ///   secrets.json            → ilk açılışta otomatik üretilen gizli anahtarlar. KAYBOLURSA TÜM PIN'LER GEÇERSİZ OLUR;
 ///                             veritabanıyla birlikte yedeklenmeli.
 ///   adisyon.db (+ -wal, -shm) → SQLite veritabanı. Yedek için "data" klasörünün tamamı kopyalanır.
@@ -15,8 +15,15 @@ namespace Adisyon.Api.Hosting;
 /// </summary>
 public static class LocalInstall
 {
+    /// <summary>
+    /// Windows'ta C:\ProgramData\Adisyon: program klasörü güncellemede değişir, veriler ayrı yerde güvende kalır.
+    /// Diğer sistemlerde (Mac'te deneme) programın yanındaki "data" klasörü.
+    /// </summary>
     public static string DataDirectory(IConfiguration configuration) =>
-        configuration["Adisyon:DataDirectory"] ?? Path.Combine(AppContext.BaseDirectory, "data");
+        configuration["Adisyon:DataDirectory"]
+        ?? (OperatingSystem.IsWindows()
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Adisyon")
+            : Path.Combine(AppContext.BaseDirectory, "data"));
 
     public static void AddLocalConfiguration(WebApplicationBuilder builder)
     {

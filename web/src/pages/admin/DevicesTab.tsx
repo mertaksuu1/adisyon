@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../api/client'
-import type { Branch, Device } from '../../api/types'
+import type { Branch, Device, SystemInfo } from '../../api/types'
 import { Badge, Button, Card, Message } from './ui'
 
 /**
@@ -11,6 +11,7 @@ export function DevicesTab() {
   const queryClient = useQueryClient()
   const devices = useQuery({ queryKey: ['devices'], queryFn: () => api<Device[]>('GET', '/devices') })
   const branches = useQuery({ queryKey: ['branches'], queryFn: () => api<Branch[]>('GET', '/branches') })
+  const system = useQuery({ queryKey: ['system-info'], queryFn: () => api<SystemInfo>('GET', '/system/info') })
   const [code, setCode] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -37,6 +38,21 @@ export function DevicesTab() {
   return (
     <div className="space-y-4">
       <Message error={error} />
+
+      <Card title="Diğer cihazlar hangi adresi açacak?">
+        {system.data && system.data.addresses.length > 0 ? (
+          <>
+            <p className="text-sm text-stone-600">Restorandaki tablet veya bilgisayarın tarayıcısında şu adresi açın (aynı Wi-Fi'da olmalı):</p>
+            <ul className="mt-2 space-y-1">
+              {system.data.addresses.map((a) => (
+                <li key={a} className="font-mono text-xl font-bold text-stone-900 select-all">{a}</li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p className="text-sm text-stone-600">Bu bilgisayar bir ağa bağlı görünmüyor. Wi-Fi veya kablo bağlantısını kontrol edin.</p>
+        )}
+      </Card>
 
       <Card
         title="Yeni cihaz bağla"

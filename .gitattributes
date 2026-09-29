@@ -1,0 +1,2 @@
+# Windows kurulum dosyaları: satır sonları (CRLF) ve BOM olduğu gibi kalmalı
+installer/* -text

@@ -9,10 +9,21 @@ using Adisyon.Api.Tenancy;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting.WindowsServices;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    // Windows servisi olarak çalışırken çalışma klasörü C:\Windows\System32 olur; programın kendi
+    // klasörünü (wwwroot, appsettings) bulabilmesi için kök klasörü açıkça veriyoruz.
+    ContentRootPath = WindowsServiceHelpers.IsWindowsService() ? AppContext.BaseDirectory : null,
+});
+
+// Windows'ta servis olarak başlatıldıysa servis gibi davran (bilgisayar açılınca kendiliğinden başlar).
+// Diğer durumlarda (Mac, geliştirme, testler) hiçbir etkisi yoktur.
+builder.Host.UseWindowsService(options => options.ServiceName = "Adisyon");
 
 // Restoran bilgisayarındaki kurulum: gizli anahtarlar ve yerel ayarlar "data" klasöründen (geliştirmede devre dışı).
 LocalInstall.AddLocalConfiguration(builder);
@@ -108,6 +119,13 @@ builder.Services.AddSingleton<BranchNotifier>();
 builder.Services.AddSingleton<PreviewPrinter>();
 builder.Services.AddSingleton<IPrinter>(services => services.GetRequiredService<PreviewPrinter>());
 builder.Services.AddOpenApi();
+
+// Yedekler: her zaman elle alınabilir; otomatik gece yedeği yalnızca restoran kurulumunda çalışır.
+builder.Services.AddSingleton<BackupService>();
+if (!builder.Environment.IsDevelopment() && !builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddHostedService<NightlyBackupWorker>();
+}
 
 var app = builder.Build();
 

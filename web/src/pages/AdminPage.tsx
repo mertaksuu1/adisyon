@@ -1,6 +1,7 @@
 import { useSearchParams } from 'react-router'
 import { HomeBackLink } from '../components/BackLink'
 import { TopBar } from '../components/TopBar'
+import { BackupsTab } from './admin/BackupsTab'
 import { DevicesTab } from './admin/DevicesTab'
 import { MenuTab } from './admin/MenuTab'
 import { StaffTab } from './admin/StaffTab'
@@ -11,6 +12,7 @@ const tabs = [
   { key: 'masalar', label: 'Masalar', Component: TablesTab },
   { key: 'personel', label: 'Personel', Component: StaffTab },
   { key: 'cihazlar', label: 'Cihazlar', Component: DevicesTab },
+  { key: 'yedekler', label: 'Yedekler', Component: BackupsTab },
 ] as const
 
 /** Yönetim: menü, masalar, personel ve cihazlar. Yalnızca işletme sahibi ve yönetici. */

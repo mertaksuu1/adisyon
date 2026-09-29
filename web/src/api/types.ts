@@ -176,3 +176,16 @@ export type Device = {
   /** Şu an kullanılan cihaz (bağlantısı kesilemez). */
   isCurrent: boolean
 }
+
+export type BackupInfo = {
+  fileName: string
+  createdAt: string
+  sizeBytes: number
+}
+
+export type SystemInfo = {
+  /** Diğer cihazların açacağı adresler, ör. "http://192.168.1.20:5000". */
+  addresses: string[]
+  lastBackup: BackupInfo | null
+  backupDirectory: string
+}

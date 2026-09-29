@@ -68,9 +68,10 @@ cd web && npm run build && npm run lint
 scripts/build-package.sh win-x64
 ```
 
-`dist/adisyon-win-x64/` klasörü oluşur: web ekranları dahil tek program, .NET kurulumu gerektirmez. Program ilk açıldığında:
+`dist/Adisyon-win-x64.zip` oluşur. Kasa bilgisayarında ZIP'i açıp **Kur.cmd**'ye çift tıklayın (yönetici izni ister):
+program `C:\Program Files\Adisyon`'a kurulur, "Adisyon" Windows servisi olarak bilgisayar açılınca kendiliğinden başlar,
+güvenlik duvarında 5000 portu açılır ve masaüstüne "Adisyon" kısayolu konur. Güncelleme için yeni paketteki Kur.cmd tekrar çalıştırılır.
+Ayrıntılar paketteki BENIOKU.txt dosyasında.
 
-- `data/secrets.json` içinde bu kuruluma özel gizli anahtarlar üretilir. **Bu dosya veritabanıyla birlikte yedeklenmeli**; kaybolursa PIN'ler çalışmaz.
-- Veritabanı boşsa tarayıcıda ilk kurulum sihirbazı açılır (restoran, şube, işletme sahibi ve PIN).
-
-Veritabanı `data/adisyon.db` dosyasıdır (SQLite; ayrı veritabanı kurulumu gerekmez). **Yedek almak için `data` klasörünün tamamını kopyalayın**; gizli anahtarlar da oradadır.
+- Veriler `C:\ProgramData\Adisyon`: `adisyon.db` (SQLite), `secrets.json` (**kaybolursa PIN'ler çalışmaz**), `yedekler/` (her gün otomatik, son 30).
+- İlk açılışta tarayıcıda ilk kurulum sihirbazı açılır (restoran, şube, işletme sahibi ve PIN).

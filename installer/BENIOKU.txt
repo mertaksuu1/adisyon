@@ -1,0 +1,23 @@
+﻿ADİSYON - KURULUM
+=================
+
+KURMAK / GÜNCELLEMEK
+  1. Bu klasörü kasa bilgisayarına kopyalayın.
+  2. "Kur.cmd" dosyasına çift tıklayın, yönetici izni isteğine "Evet" deyin.
+  3. Kurulum bitince Adisyon kendiliğinden açılır. İlk açılışta restoran adı,
+     işletme sahibi ve PIN sorulur.
+
+  Güncelleme için yeni paketteki "Kur.cmd" tekrar çalıştırılır. Veriler korunur.
+
+DİĞER CİHAZLAR (tablet, ikinci bilgisayar)
+  Kurulum sonunda ekranda gösterilen adresi (ör. http://192.168.1.20:5000)
+  tabletin tarayıcısında açın. Eşleştirme kodunu Yönetim > Cihazlar'dan oluşturun.
+
+VERİLER VE YEDEK
+  Veriler:  C:\ProgramData\Adisyon
+  Yedekler: C:\ProgramData\Adisyon\yedekler  (her gün otomatik)
+  Bu klasörü ara sıra USB belleğe kopyalayın. İçindeki secrets.json olmadan
+  PIN'ler çalışmaz; yedeklerle birlikte saklayın.
+
+KALDIRMAK
+  "Kaldir.cmd" çalıştırılır. Veriler silinmez.

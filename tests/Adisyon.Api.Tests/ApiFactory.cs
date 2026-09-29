@@ -23,11 +23,15 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     /// <summary>Bu test grubuna özel veritabanı dosyası; testler bitince silinir.</summary>
     private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"adisyon-test-{Guid.NewGuid():N}.db");
 
+    /// <summary>Yedek testleri için geçici klasör; testler bitince silinir.</summary>
+    public string BackupDirectory { get; } = Path.Combine(Path.GetTempPath(), $"adisyon-test-yedek-{Guid.NewGuid():N}");
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // "Testing" ortamında demo veri yükleyici çalışmaz; testler kendi verisini kurar.
         builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:Adisyon", $"Data Source={_databasePath}");
+        builder.UseSetting("Backup:Directory", BackupDirectory);
         builder.UseSetting("Jwt:SigningKey", "test-ortami-icin-en-az-otuz-iki-karakterlik-anahtar");
         builder.UseSetting("Pin:HashKey", "test-ortami-icin-pin-ozet-anahtari-otuz-iki-karakter");
         // Tüm testler aynı "IP"den geldiği için istek sınırlarını testlerde yükseltiyoruz.
@@ -154,6 +158,10 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     {
         await base.DisposeAsync();
         SqliteConnection.ClearAllPools(); // dosya kilidini bırak, sonra sil
+        if (Directory.Exists(BackupDirectory))
+        {
+            Directory.Delete(BackupDirectory, recursive: true);
+        }
         foreach (var suffix in new[] { "", "-wal", "-shm" })
         {
             File.Delete(_databasePath + suffix);
