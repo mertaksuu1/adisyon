@@ -52,6 +52,9 @@ public class AdisyonDbContext(DbContextOptions<AdisyonDbContext> options, Tenant
             e.Property(x => x.Name).HasMaxLength(200);
             e.Property(x => x.Address).HasMaxLength(500);
             e.Property(x => x.PairingCodeHash).HasMaxLength(64);
+            e.Property(x => x.KitchenPrinterAddress).HasMaxLength(100);
+            e.Property(x => x.ReceiptPrinterAddress).HasMaxLength(100);
+            e.Property(x => x.PrinterCodePage).HasDefaultValue(13);
             e.HasIndex(x => x.PairingCodeHash).IsUnique();
         });
 

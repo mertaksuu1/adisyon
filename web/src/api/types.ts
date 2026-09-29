@@ -111,9 +111,15 @@ export type Session = {
   version: number
   orders: Order[]
   payments: Payment[]
+  /** Yalnızca sipariş gönderince: mutfak fişi yazdırılamadıysa uyarı ve tekrar yazdırılacak fişin kimliği. */
+  printWarning?: string | null
+  failedTicketId?: string | null
 }
 
-/** Sanal yazıcının bastığı fiş (sunucudaki PrintedTicket). */
+/** Preview: yazıcı ayarlı değil, yalnızca ekranda. Printed: yazıcıya gitti. Failed: yazıcıya ulaşılamadı. */
+export type PrintStatus = 'Preview' | 'Printed' | 'Failed'
+
+/** Yazdırılan (veya yazdırılamayan) fiş (sunucudaki PrintedTicket). */
 export type PrintedTicket = {
   id: string
   kind: 'Kitchen' | 'Bill' | 'Report'
@@ -123,6 +129,22 @@ export type PrintedTicket = {
   printedAt: string
   /** Kâğıda basılacak düz metin, 48 karakter genişliğinde. */
   text: string
+  status: PrintStatus
+  error: string | null
+}
+
+/** Yazdırma isteğinin sonucu (hesap fişi, Z raporu, tekrar yazdırma, test fişi). */
+export type PrintResult = {
+  ticketId: string
+  status: PrintStatus
+  error: string | null
+}
+
+/** Şubenin yazıcı ayarları. Adres boşsa o fişler yalnızca Fişler sayfasında görünür. */
+export type PrinterSettings = {
+  kitchenPrinterAddress: string | null
+  receiptPrinterAddress: string | null
+  printerCodePage: number
 }
 
 export type NewOrderItem = {

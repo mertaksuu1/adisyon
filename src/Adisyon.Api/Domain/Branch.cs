@@ -14,5 +14,20 @@ public class Branch : ITenantOwned
     /// </summary>
     public string? PairingCodeHash { get; set; }
 
+    /// <summary>
+    /// Mutfak yazıcısının ağ adresi, ör. "192.168.1.50" veya "192.168.1.50:9100". Boşsa fişler yalnızca
+    /// ekranda önizlenir. Mutfak, iptal ve masa değişikliği fişleri buraya gider.
+    /// </summary>
+    public string? KitchenPrinterAddress { get; set; }
+
+    /// <summary>Kasa yazıcısı: hesap fişi ve Z raporu. Boşsa bunlar da mutfak yazıcısından çıkar.</summary>
+    public string? ReceiptPrinterAddress { get; set; }
+
+    /// <summary>
+    /// Yazıcının Türkçe karakter tablosu numarası (ESC/POS "ESC t n"). Epson ve çoğu uyumlu yazıcıda
+    /// Türkçe (PC857) = 13. Test fişinde "ş, ğ, ı, İ" bozuk çıkarsa yazıcının kılavuzundaki numara girilir.
+    /// </summary>
+    public int PrinterCodePage { get; set; } = 13;
+
     public List<DiningTable> Tables { get; set; } = [];
 }

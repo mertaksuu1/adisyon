@@ -238,7 +238,7 @@ public class SessionTests(ApiFactory factory)
 
         var print = await waiter.PostAsync($"/api/sessions/{session.Id}/print-bill", null);
 
-        Assert.Equal(HttpStatusCode.NoContent, print.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, print.StatusCode);
         var bill = (await owner.GetFromJsonAsync<List<PrintedTicket>>("/api/print/recent", ApiFactory.JsonOptions))!
             .First(t => t.Kind == TicketKind.Bill);
         var lines = bill.Text.Split('\n').Select(l => l.TrimEnd('\r')).ToList();

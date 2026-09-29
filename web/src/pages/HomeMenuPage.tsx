@@ -39,6 +39,7 @@ export default function HomeMenuPage() {
     { to: '/yonetim?sekme=masalar', title: 'Masa düzeni', subtitle: 'Masa ekle, adlandır, kapat' },
     { to: '/yonetim?sekme=personel', title: 'Personel', subtitle: 'Personel, roller ve PIN\'ler' },
     { to: '/yonetim?sekme=cihazlar', title: 'Cihazlar', subtitle: 'Yeni cihaz bağla, bağlantı kes' },
+    { to: '/yonetim?sekme=yazicilar', title: 'Yazıcılar', subtitle: 'Mutfak ve kasa yazıcısı, test fişi' },
     { to: '/yonetim?sekme=yedekler', title: 'Yedekler', subtitle: 'Son yedek, şimdi yedek al' },
   ]
 

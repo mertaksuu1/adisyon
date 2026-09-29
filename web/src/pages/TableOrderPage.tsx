@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router'
 import { api, ApiError } from '../api/client'
-import type { Category, NewOrderItem, OrderItem, Product, Session, Table } from '../api/types'
+import type { Category, NewOrderItem, OrderItem, PrintResult, Product, Session, Table } from '../api/types'
 import { useAuth } from '../auth/useAuth'
 import { canCheckout } from '../auth/roles'
 import { ItemActionDialog } from '../components/ItemActionDialog'
@@ -11,6 +11,7 @@ import { PaymentDialog } from '../components/PaymentDialog'
 import { BackLink } from '../components/BackLink'
 import { TopBar } from '../components/TopBar'
 import { formatMoney, formatTime } from '../lib/format'
+import { describePrint } from '../lib/print'
 
 /** Sepette henüz mutfağa gönderilmemiş bir satır. */
 type CartLine = { key: string; product: Product; quantity: number; note: string }
@@ -45,6 +46,7 @@ export default function TableOrderPage() {
   const [cart, setCart] = useState<CartLine[]>([])
   const [editingNote, setEditingNote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [printFailure, setPrintFailure] = useState<{ message: string; ticketId: string } | null>(null)
   const cartTotal = cart.reduce((sum, l) => sum + l.product.price * l.quantity, 0)
 
   function addToCart(product: Product) {
@@ -92,10 +94,18 @@ export default function TableOrderPage() {
       }))
       return api<Session>('POST', `/sessions/${id}/orders`, { items })
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: ['tables'] })
+      if (saved.printWarning && saved.failedTicketId) {
+        // Sipariş kaydedildi ama mutfağa fiş çıkmadı: masa planına dönmeden garsona göster, aksi hâlde
+        // mutfak siparişten habersiz kalır.
+        setCart([])
+        queryClient.setQueryData(['session', saved.id], saved)
+        setPrintFailure({ message: saved.printWarning, ticketId: saved.failedTicketId })
+        return
+      }
       // Siparişten sonra masa planına dön; sıradaki masaya geçmek en sık yapılan iş.
-      navigate('/garson', { state: { flash: `${table?.name}: sipariş gönderildi, mutfak fişi yazdırıldı.` } })
+      navigate('/garson', { state: { flash: `${table?.name}: sipariş gönderildi.` } })
     },
     onError: (err) => setError(err.message),
   })
@@ -131,10 +141,26 @@ export default function TableOrderPage() {
   }
 
   const printBill = useMutation({
-    mutationFn: () => api('POST', `/sessions/${sessionId}/print-bill`),
-    onSuccess: () => {
-      setNotice('Hesap fişi yazdırıldı.')
+    mutationFn: () => api<PrintResult>('POST', `/sessions/${sessionId}/print-bill`),
+    onSuccess: (result) => {
+      const { error, success } = describePrint(result, 'Hesap fişi')
+      setError(error)
+      setNotice(success)
       queryClient.invalidateQueries({ queryKey: ['tickets'] })
+    },
+    onError: (err) => setError(err.message),
+  })
+
+  const reprintKitchen = useMutation({
+    mutationFn: (ticketId: string) => api<PrintResult>('POST', `/print/${ticketId}/reprint`),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['tickets'] })
+      if (result.status === 'Failed') {
+        setPrintFailure((f) => f && { ...f, message: `Yine yazdırılamadı. ${result.error ?? ''}` })
+      } else {
+        setPrintFailure(null)
+        setNotice(describePrint(result, 'Mutfak fişi').success)
+      }
     },
     onError: (err) => setError(err.message),
   })
@@ -287,6 +313,19 @@ export default function TableOrderPage() {
               </ul>
             )}
 
+            {printFailure && (
+              <div className="mt-4 rounded-xl bg-red-600 p-3 text-white" role="alert">
+                <p className="font-semibold">{printFailure.message}</p>
+                <button
+                  type="button"
+                  disabled={reprintKitchen.isPending}
+                  onClick={() => reprintKitchen.mutate(printFailure.ticketId)}
+                  className="mt-2 w-full rounded-lg bg-white py-2 font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                >
+                  {reprintKitchen.isPending ? 'Yazdırılıyor…' : 'Mutfak fişini tekrar yazdır'}
+                </button>
+              </div>
+            )}
             {error && <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{error}</p>}
             {notice && !error && <p className="mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800" role="status">{notice}</p>}
           </div>

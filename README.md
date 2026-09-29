@@ -76,6 +76,19 @@ Ayrıntılar paketteki BENIOKU.txt dosyasında.
 - Veriler `C:\ProgramData\Adisyon`: `adisyon.db` (SQLite), `secrets.json` (**kaybolursa PIN'ler çalışmaz**), `yedekler/` (her gün otomatik, son 30).
 - İlk açılışta tarayıcıda ilk kurulum sihirbazı açılır (restoran, şube, işletme sahibi ve PIN).
 
+## Fiş yazıcısı
+
+Ağa bağlı (Ethernet/Wi-Fi) ESC/POS termal yazıcılar desteklenir (ör. Epson TM-T20III, Xprinter XP-Q80; 80 mm, 48 karakter).
+USB yazıcılar şimdilik desteklenmiyor.
+
+1. Yazıcıyı modeme kabloyla bağlayın; FEED düğmesine basılı tutarak açınca IP adresini yazan bir ayar fişi basar.
+2. Modemden yazıcıya sabit adres verin (DHCP rezervasyonu).
+3. **Yönetim → Yazıcılar**: mutfak yazıcısının adresini (ör. `192.168.1.50`) yazıp kaydedin, **Test fişi** ile deneyin.
+   Kasada ikinci yazıcı varsa "Kasa yazıcısı"na yazın; yoksa hesap fişi ve Z raporu da mutfak yazıcısından çıkar.
+4. Test fişinde ş, ğ, ı bozuksa "Türkçe karakter tablosu" numarasını yazıcının kılavuzuna göre değiştirin (çoğunda 13).
+
+Yazıcı kapalıysa sipariş yine kaydedilir; garson ekranında kırmızı uyarı ve "tekrar yazdır" düğmesi çıkar.
+
 ## Yapay zeka özellikleri (isteğe bağlı)
 
 Gün sonu raporu yorumu ve "Rapora sor" sayfası Claude API kullanır; internet ve bir API anahtarı gerekir.

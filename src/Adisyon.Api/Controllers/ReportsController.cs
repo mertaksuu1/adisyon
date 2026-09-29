@@ -20,14 +20,14 @@ public class ReportsController(AdisyonDbContext db, IPrinter printer, TimeProvid
         ZReport.BuildAsync(db, User.GetBranchId(), date ?? BusinessDay.Of(timeProvider.GetUtcNow()), cancellationToken);
 
     [HttpPost("z/print")]
-    public async Task<IActionResult> Print([FromQuery] DateOnly? date, CancellationToken cancellationToken)
+    public async Task<ActionResult<PrintResult>> Print([FromQuery] DateOnly? date, CancellationToken cancellationToken)
     {
         var branchId = User.GetBranchId();
         var report = await ZReport.BuildAsync(db, branchId, date ?? BusinessDay.Of(timeProvider.GetUtcNow()), cancellationToken);
         var branch = await db.Branches.SingleAsync(b => b.Id == branchId, cancellationToken);
         var tenant = await db.Tenants.SingleAsync(t => t.Id == branch.TenantId, cancellationToken);
 
-        await printer.PrintAsync(ZReportTicket.Create(tenant.Name, branch.Name, report, timeProvider.GetUtcNow(), branchId), cancellationToken);
-        return NoContent();
+        var ticket = await printer.PrintAsync(ZReportTicket.Create(tenant.Name, branch.Name, report, timeProvider.GetUtcNow(), branchId), cancellationToken);
+        return PrintResult.From(ticket);
     }
 }

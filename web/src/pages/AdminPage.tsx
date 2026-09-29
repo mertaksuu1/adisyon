@@ -4,6 +4,7 @@ import { TopBar } from '../components/TopBar'
 import { BackupsTab } from './admin/BackupsTab'
 import { DevicesTab } from './admin/DevicesTab'
 import { MenuTab } from './admin/MenuTab'
+import { PrintersTab } from './admin/PrintersTab'
 import { StaffTab } from './admin/StaffTab'
 import { TablesTab } from './admin/TablesTab'
 
@@ -12,10 +13,11 @@ const tabs = [
   { key: 'masalar', label: 'Masalar', Component: TablesTab },
   { key: 'personel', label: 'Personel', Component: StaffTab },
   { key: 'cihazlar', label: 'Cihazlar', Component: DevicesTab },
+  { key: 'yazicilar', label: 'Yazıcılar', Component: PrintersTab },
   { key: 'yedekler', label: 'Yedekler', Component: BackupsTab },
 ] as const
 
-/** Yönetim: menü, masalar, personel ve cihazlar. Yalnızca işletme sahibi ve yönetici. */
+/** Yönetim: menü, masalar, personel, cihazlar, yazıcılar ve yedekler. Yalnızca işletme sahibi ve yönetici. */
 export default function AdminPage() {
   // Seçili sekme adreste tutulur (/yonetim?sekme=personel): sayfa yenilenince aynı sekmede kalınır.
   const [params, setParams] = useSearchParams()

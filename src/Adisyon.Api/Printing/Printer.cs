@@ -15,37 +15,53 @@ public enum TicketKind
 /// <summary>Yazdırılacak fiş: türü, hangi şubenin yazıcısına gideceği, başlığı ve kâğıda basılacak metin.</summary>
 public record PrintJob(TicketKind Kind, Guid BranchId, string Title, string Text);
 
-/// <summary>Fişi yazdıran yer. Faz 4'te gerçek termal yazıcı (ESC/POS) bu arayüzü uygulayacak.</summary>
-public interface IPrinter
+public enum PrintStatus
 {
-    Task PrintAsync(PrintJob job, CancellationToken cancellationToken);
+    /// <summary>Bu fiş türü için yazıcı ayarlanmamış; yalnızca ekranda (Fişler sayfası) görünür.</summary>
+    Preview,
+    /// <summary>Yazıcıya gönderildi.</summary>
+    Printed,
+    /// <summary>Yazıcıya ulaşılamadı (kapalı, kağıt bitti, ağ yok). Fişler sayfasından tekrar yazdırılabilir.</summary>
+    Failed,
 }
 
-/// <summary>Önizlemesi gösterilen, basılmış bir fiş.</summary>
-public record PrintedTicket(Guid Id, TicketKind Kind, Guid BranchId, string Title, DateTimeOffset PrintedAt, string Text);
+/// <summary>Fişi yazdıran yer: şubenin ayarına göre gerçek yazıcıya gönderir ya da yalnızca önizler.</summary>
+public interface IPrinter
+{
+    /// <summary>Hiçbir zaman hata fırlatmaz: sonucu (Printed/Preview/Failed) döndürür, fiş her durumda kaydedilir.</summary>
+    Task<PrintedTicket> PrintAsync(PrintJob job, CancellationToken cancellationToken);
+}
+
+/// <summary>Kaydedilmiş bir fiş ve yazdırma sonucu.</summary>
+public record PrintedTicket(
+    Guid Id, TicketKind Kind, Guid BranchId, string Title, DateTimeOffset PrintedAt, string Text,
+    PrintStatus Status = PrintStatus.Preview, string? Error = null);
 
 /// <summary>
-/// Sanal yazıcı: yazıcı yokken fişleri bellekte tutar, "Fişler" sayfası bunları gösterir.
+/// Son fişlerin kaydı (bellekte, şube başına en fazla 100). "Fişler" sayfası ve tekrar yazdırma bunu kullanır.
 /// Sunucu yeniden başlarsa liste sıfırlanır; asıl kayıt veritabanındaki siparişler ve ödemelerdir.
 /// </summary>
-public class PreviewPrinter(TimeProvider timeProvider) : IPrinter
+public class TicketLog
 {
     private const int MaxTickets = 100;
-    private readonly ConcurrentQueue<PrintedTicket> _tickets = new();
+    private readonly ConcurrentDictionary<Guid, PrintedTicket> _tickets = new();
 
-    public Task PrintAsync(PrintJob job, CancellationToken cancellationToken)
+    public void Save(PrintedTicket ticket)
     {
-        _tickets.Enqueue(new PrintedTicket(Guid.CreateVersion7(), job.Kind, job.BranchId, job.Title,
-            timeProvider.GetUtcNow(), job.Text));
-        while (_tickets.Count > MaxTickets && _tickets.TryDequeue(out _))
+        _tickets[ticket.Id] = ticket;
+        foreach (var old in _tickets.Values.Where(t => t.BranchId == ticket.BranchId)
+                     .OrderByDescending(t => t.PrintedAt).ThenByDescending(t => t.Id).Skip(MaxTickets))
         {
+            _tickets.TryRemove(old.Id, out _);
         }
-        return Task.CompletedTask;
     }
+
+    public PrintedTicket? Find(Guid id, Guid branchId) =>
+        _tickets.TryGetValue(id, out var ticket) && ticket.BranchId == branchId ? ticket : null;
 
     /// <summary>Bir şubenin son fişleri, en yenisi önce.</summary>
     public List<PrintedTicket> Recent(Guid branchId) =>
-        _tickets.Where(t => t.BranchId == branchId).Reverse().ToList();
+        _tickets.Values.Where(t => t.BranchId == branchId).OrderByDescending(t => t.PrintedAt).ThenByDescending(t => t.Id).ToList();
 }
 
 /// <summary>Fiş metni yazarken ortak yardımcılar.</summary>

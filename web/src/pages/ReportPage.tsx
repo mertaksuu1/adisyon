@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
-import type { AdjustmentLine, AiResult, ZReport } from '../api/types'
+import type { AdjustmentLine, AiResult, PrintResult, ZReport } from '../api/types'
 import { AiText } from '../components/AiText'
 import { AI_PACKAGE_OFF_TEXT, useAiPackage } from '../lib/useAiPackage'
 import { HomeBackLink } from '../components/BackLink'
 import { TopBar } from '../components/TopBar'
 import { formatMoney, formatTime } from '../lib/format'
+import { describePrint } from '../lib/print'
 
 /**
  * Gün sonu (Z) raporu. İş günü sabah 05:00'te başlar; tarih seçilmezse bugünkü iş günü gösterilir.
@@ -15,7 +16,7 @@ import { formatMoney, formatTime } from '../lib/format'
 export default function ReportPage() {
   // null: sunucu "bugünkü iş günü"nü kendisi seçsin (gece 02:00'de bile doğru günü verir).
   const [date, setDate] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ error: string | null; success: string | null } | null>(null)
 
   const report = useQuery({
     queryKey: ['z-report', date],
@@ -23,9 +24,9 @@ export default function ReportPage() {
   })
 
   const print = useMutation({
-    mutationFn: () => api('POST', `/reports/z/print${date ? `?date=${date}` : ''}`),
-    onSuccess: () => setNotice('Rapor yazdırıldı.'),
-    onError: (err) => setNotice(err.message),
+    mutationFn: () => api<PrintResult>('POST', `/reports/z/print${date ? `?date=${date}` : ''}`),
+    onSuccess: (result) => setNotice(describePrint(result, 'Rapor')),
+    onError: (err) => setNotice({ error: err.message, success: null }),
   })
 
   const z = report.data
@@ -64,7 +65,8 @@ export default function ReportPage() {
           </button>
         </div>
 
-        {notice && <p className="rounded-xl bg-green-50 px-4 py-2 text-sm text-green-800 ring-1 ring-green-200">{notice}</p>}
+        {notice?.error && <p className="rounded-xl bg-red-50 px-4 py-2 text-sm text-red-700 ring-1 ring-red-200" role="alert">{notice.error}</p>}
+        {notice?.success && <p className="rounded-xl bg-green-50 px-4 py-2 text-sm text-green-800 ring-1 ring-green-200">{notice.success}</p>}
         {report.isPending && <p className="text-stone-500">Rapor hazırlanıyor…</p>}
         {report.isError && <p className="text-red-700">{report.error.message}</p>}
 

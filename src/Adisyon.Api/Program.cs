@@ -133,9 +133,11 @@ builder.Services.AddSignalR()
     .AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddSingleton<BranchNotifier>();
 
-// Fişler (mutfak ve hesap): yazıcı gelene kadar sanal yazıcı (önizleme). Faz 4'te gerçek ESC/POS yazıcı eklenecek.
-builder.Services.AddSingleton<PreviewPrinter>();
-builder.Services.AddSingleton<IPrinter>(services => services.GetRequiredService<PreviewPrinter>());
+// Fişler: şubede yazıcı adresi varsa ESC/POS ağ yazıcısına gönderilir, yoksa yalnızca önizlenir (Fişler sayfası).
+builder.Services.AddSingleton<TicketLog>();
+builder.Services.AddSingleton<NetworkPrinterClient>();
+builder.Services.AddScoped<PrintService>();
+builder.Services.AddScoped<IPrinter>(services => services.GetRequiredService<PrintService>());
 builder.Services.AddOpenApi();
 
 // Yapay zeka: gün sonu yorumu ve rapora soru sorma (API anahtarı ve internet gerekir; yoksa "kullanılamıyor" der).

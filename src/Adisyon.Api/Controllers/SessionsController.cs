@@ -117,10 +117,15 @@ public class SessionsController(
         session.UpdatedAt = now; // Sürümü (xmin) değiştirir; açık kapanış ekranları eskimiş olur.
         await db.SaveChangesAsync(cancellationToken);
 
-        await PrintKitchenTicketAsync(order.Id, cancellationToken);
+        var ticket = await PrintKitchenTicketAsync(order.Id, cancellationToken);
         await notifier.TablesChangedAsync(session.BranchId);
 
-        return (await LoadDtoAsync(session.Id, cancellationToken))!;
+        // Sipariş kaydedildi; fiş basılamadıysa garson hemen görsün (mutfak siparişi sessizce kaybolmasın).
+        return (await LoadDtoAsync(session.Id, cancellationToken))! with
+        {
+            PrintWarning = WarningFor(ticket),
+            FailedTicketId = ticket?.Status == PrintStatus.Failed ? ticket.Id : null,
+        };
     }
 
     /// <summary>
@@ -384,23 +389,21 @@ public class SessionsController(
         return (await LoadDtoAsync(resultId, cancellationToken))!;
     }
 
-    /// <summary>Yazdırır; yazıcı hatası işlemi geri almaz (kayıt zaten yapıldı), yalnızca günlüğe yazılır.</summary>
-    private async Task PrintAsync(PrintJob job)
-    {
-        try
-        {
-            await printer.PrintAsync(job, CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Fiş yazdırılamadı ({Kind}, {Title})", job.Kind, job.Title);
-        }
-    }
+    /// <summary>
+    /// Yazdırır; yazıcı hatası işlemi geri almaz (kayıt zaten yapıldı). Başarısız fiş Fişler sayfasında
+    /// "tekrar yazdır" ile görünür.
+    /// </summary>
+    private Task<PrintedTicket> PrintAsync(PrintJob job) => printer.PrintAsync(job, CancellationToken.None);
+
+    private static string? WarningFor(PrintedTicket? ticket) =>
+        ticket?.Status == PrintStatus.Failed
+            ? $"Mutfak fişi yazdırılamadı! {ticket.Error} Sipariş kaydedildi; yazıcıyı kontrol edip tekrar yazdırın."
+            : null;
 
     /// <summary>Müşteriye verilecek hesap fişini (adisyon pusulası) yazdırır.</summary>
     [HttpPost("sessions/{id:guid}/print-bill")]
     [Authorize(Roles = RoleNames.FrontOfHouse)]
-    public async Task<IActionResult> PrintBill(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<PrintResult>> PrintBill(Guid id, CancellationToken cancellationToken)
     {
         var session = await FindWithMoneyAsync(id, cancellationToken);
         if (session is null)
@@ -410,8 +413,8 @@ public class SessionsController(
 
         var branch = await db.Branches.SingleAsync(b => b.Id == session.BranchId, cancellationToken);
         var tenant = await db.Tenants.SingleAsync(t => t.Id == session.TenantId, cancellationToken);
-        await printer.PrintAsync(BillTicket.Create(tenant.Name, branch.Name, session, timeProvider.GetUtcNow()), cancellationToken);
-        return NoContent();
+        var ticket = await printer.PrintAsync(BillTicket.Create(tenant.Name, branch.Name, session, timeProvider.GetUtcNow()), cancellationToken);
+        return PrintResult.From(ticket);
     }
 
     /// <summary>
@@ -436,19 +439,18 @@ public class SessionsController(
         Problem(statusCode: StatusCodes.Status409Conflict,
             title: "Adisyon siz bakarken değişti. Güncel hâlini görüp tekrar deneyin.");
 
-    /// <summary>
-    /// Mutfak fişini yazdırır. Yazıcı hatası siparişi geri almaz (sipariş zaten kaydedildi);
-    /// Faz 4'te "fiş yazdırılamadı, tekrar dene" uyarısı eklenecek.
-    /// </summary>
-    private async Task PrintKitchenTicketAsync(Guid orderId, CancellationToken cancellationToken)
+    /// <summary>Mutfak fişini yazdırır. Yazıcı hatası siparişi geri almaz (sipariş zaten kaydedildi).</summary>
+    private async Task<PrintedTicket?> PrintKitchenTicketAsync(Guid orderId, CancellationToken cancellationToken)
     {
         try
         {
-            await printer.PrintAsync((await KitchenTicket.LoadAsync(db, orderId, cancellationToken)).ToPrintJob(), cancellationToken);
+            return await printer.PrintAsync((await KitchenTicket.LoadAsync(db, orderId, cancellationToken)).ToPrintJob(), cancellationToken);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Mutfak fişi yazdırılamadı (sipariş {OrderId})", orderId);
+            // Beklenmeyen hata (ör. fiş oluşturulamadı): siparişi bozma, günlüğe yaz.
+            logger.LogError(ex, "Mutfak fişi hazırlanamadı (sipariş {OrderId})", orderId);
+            return null;
         }
     }
 
@@ -512,13 +514,21 @@ public record SessionDto(
     decimal Remaining,
     uint Version,
     List<OrderDto> Orders,
-    List<PaymentDto> Payments)
+    List<PaymentDto> Payments,
+    string? PrintWarning = null,
+    Guid? FailedTicketId = null)
 {
     public static SessionDto From(TableSession s) => new(
         s.Id, s.TableId, s.Table!.Name, s.Status, s.OpenedAt, s.ClosedAt,
         SessionMoney.Total(s), SessionMoney.Paid(s), SessionMoney.Remaining(s), s.Version,
         s.Orders.OrderBy(o => o.CreatedAt).Select(OrderDto.From).ToList(),
         s.Payments.OrderBy(p => p.CreatedAt).Select(p => new PaymentDto(p.Id, p.Method, p.Amount, p.CreatedAt)).ToList());
+}
+
+/// <summary>Yazdırma sonucu: Status Printed/Preview/Failed; Failed ise Error kullanıcıya gösterilir.</summary>
+public record PrintResult(Guid TicketId, PrintStatus Status, string? Error)
+{
+    public static PrintResult From(PrintedTicket ticket) => new(ticket.Id, ticket.Status, ticket.Error);
 }
 
 public record PaymentDto(Guid Id, PaymentMethod Method, decimal Amount, DateTimeOffset CreatedAt);
