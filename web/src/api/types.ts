@@ -189,3 +189,9 @@ export type SystemInfo = {
   lastBackup: BackupInfo | null
   backupDirectory: string
 }
+
+/** Yapay zeka cevabı. available false ise text, neden kullanılamadığını açıklar (anahtar yok, internet yok…). */
+export type AiResult = {
+  available: boolean
+  text: string
+}

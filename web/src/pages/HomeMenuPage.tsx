@@ -25,6 +25,7 @@ export default function HomeMenuPage() {
     },
     { to: '/rapor', title: 'Gün sonu raporu', subtitle: 'Z raporu, tahsilat, iptal ve ikramlar' },
     { to: '/fisler', title: 'Fişler', subtitle: 'Mutfak, hesap ve rapor fişleri' },
+    { to: '/soru', title: 'Rapora sor', subtitle: 'Satışlarınıza Türkçe soru sorun (yapay zeka)' },
   ]
   const settings: Tile[] = [
     { to: '/yonetim?sekme=menu', title: 'Menü', subtitle: 'Kategori, ürün ve fiyatlar' },

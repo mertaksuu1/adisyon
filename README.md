@@ -75,3 +75,15 @@ Ayrıntılar paketteki BENIOKU.txt dosyasında.
 
 - Veriler `C:\ProgramData\Adisyon`: `adisyon.db` (SQLite), `secrets.json` (**kaybolursa PIN'ler çalışmaz**), `yedekler/` (her gün otomatik, son 30).
 - İlk açılışta tarayıcıda ilk kurulum sihirbazı açılır (restoran, şube, işletme sahibi ve PIN).
+
+## Yapay zeka özellikleri (isteğe bağlı)
+
+Gün sonu raporu yorumu ve "Rapora sor" sayfası Claude API kullanır; internet ve bir API anahtarı gerekir.
+Anahtar yoksa bu özellikler "ayarlanmamış" der, programın geri kalanı etkilenmez.
+
+- Geliştirmede: `ANTHROPIC_API_KEY` ortam değişkeni.
+- Kurulumda: `C:\ProgramData\Adisyon\appsettings.Local.json` dosyası, ardından Adisyon servisini yeniden başlatın:
+
+```json
+{ "Anthropic": { "ApiKey": "sk-ant-..." } }
+```

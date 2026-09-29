@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Adisyon.Api.Ai;
 using Adisyon.Api.Auth;
 using Adisyon.Api.Data;
 using Adisyon.Api.Hosting;
@@ -119,6 +120,10 @@ builder.Services.AddSingleton<BranchNotifier>();
 builder.Services.AddSingleton<PreviewPrinter>();
 builder.Services.AddSingleton<IPrinter>(services => services.GetRequiredService<PreviewPrinter>());
 builder.Services.AddOpenApi();
+
+// Yapay zeka: gün sonu yorumu ve rapora soru sorma (API anahtarı ve internet gerekir; yoksa "kullanılamıyor" der).
+builder.Services.AddScoped<SalesQueries>();
+builder.Services.AddSingleton<AiAssistant>();
 
 // Yedekler: her zaman elle alınabilir; otomatik gece yedeği yalnızca restoran kurulumunda çalışır.
 builder.Services.AddSingleton<BackupService>();
