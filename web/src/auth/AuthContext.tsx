@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api, setUnauthorizedHandler } from '../api/client'
-import type { LoginResponse, PairDeviceResponse } from '../api/types'
+import type { LoginResponse, PairDeviceResponse, SetupResponse } from '../api/types'
 import { storage } from './storage'
 import { AuthContext } from './useAuth'
 
@@ -36,6 +36,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return result.user
   }, [])
 
+  const completeSetup = useCallback((result: SetupResponse) => {
+    storage.setDevice(result.device)
+    storage.setSession(result.login)
+    setDevice(result.device)
+    setUser(result.login.user)
+  }, [])
+
   const unpair = useCallback(() => {
     logout()
     storage.setDevice(null)
@@ -43,8 +50,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [logout])
 
   const value = useMemo(
-    () => ({ device, user, pair, loginWithPin, logout, unpair }),
-    [device, user, pair, loginWithPin, logout, unpair],
+    () => ({ device, user, pair, loginWithPin, completeSetup, logout, unpair }),
+    [device, user, pair, loginWithPin, completeSetup, logout, unpair],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { User } from '../api/types'
+import type { SetupResponse, User } from '../api/types'
 import type { StoredDevice } from './storage'
 
 type AuthState = {
@@ -9,6 +9,8 @@ type AuthState = {
   user: User | null
   pair: (pairingCode: string, deviceName: string) => Promise<void>
   loginWithPin: (pin: string) => Promise<User>
+  /** İlk kurulum sihirbazı bitince: cihazı ve sahibin oturumunu kaydeder. */
+  completeSetup: (result: SetupResponse) => void
   logout: () => void
   /** Cihaz eşleştirmesini kaldırır (ör. bilgisayar başka şubeye taşınınca). */
   unpair: () => void

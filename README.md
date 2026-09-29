@@ -66,3 +66,20 @@ Testler Docker'da geçici bir PostgreSQL açar, bu yüzden Docker Desktop açık
 dotnet test
 cd web && npm run build && npm run lint
 ```
+
+## Restoran için kurulum paketi
+
+```bash
+scripts/build-package.sh win-x64
+```
+
+`dist/adisyon-win-x64/` klasörü oluşur: web ekranları dahil tek program, .NET kurulumu gerektirmez. Program ilk açıldığında:
+
+- `data/secrets.json` içinde bu kuruluma özel gizli anahtarlar üretilir. **Bu dosya veritabanıyla birlikte yedeklenmeli**; kaybolursa PIN'ler çalışmaz.
+- Veritabanı boşsa tarayıcıda ilk kurulum sihirbazı açılır (restoran, şube, işletme sahibi ve PIN).
+
+Veritabanı bağlantısı `data/appsettings.Local.json` dosyasına yazılır:
+
+```json
+{ "ConnectionStrings": { "Adisyon": "Host=localhost;Port=5432;Database=adisyon;Username=adisyon;Password=..." } }
+```

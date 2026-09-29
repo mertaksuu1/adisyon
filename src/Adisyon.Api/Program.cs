@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Adisyon.Api.Auth;
 using Adisyon.Api.Data;
+using Adisyon.Api.Hosting;
 using Adisyon.Api.Printing;
 using Adisyon.Api.Realtime;
 using Adisyon.Api.Tenancy;
@@ -13,10 +14,14 @@ using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Restoran bilgisayarındaki kurulum: gizli anahtarlar ve yerel ayarlar "data" klasöründen (geliştirmede devre dışı).
+LocalInstall.AddLocalConfiguration(builder);
+
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<TenantContext>();
 
-// Bağlantı dizesi appsettings.Development.json içinde (testlerde test veritabanınınki kullanılır).
+// Bağlantı dizesi: geliştirmede appsettings.Development.json, kurulumda data/appsettings.Local.json,
+// testlerde test veritabanınınki.
 builder.Services.AddDbContext<AdisyonDbContext>((services, options) =>
 {
     var connectionString = services.GetRequiredService<IConfiguration>().GetConnectionString("Adisyon")
@@ -105,21 +110,36 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    // Açılışta bekleyen veritabanı güncellemelerini (migration) uygula. Her restoranın kendi veritabanı
+    // olduğu için program güncellendiğinde şema da kendiliğinden güncellenir.
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AdisyonDbContext>();
+    await db.Database.MigrateAsync();
+
+    if (app.Environment.IsDevelopment())
+    {
+        // Yalnızca geliştirmede: demo restoran. Gerçek kurulumda restoran ilk kurulum sihirbazıyla oluşturulur.
+        await DevDataSeeder.SeedAsync(db, scope.ServiceProvider.GetRequiredService<SecretHasher>());
+    }
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi().AllowAnonymous();
     // API dokümantasyonu: http://localhost:5260/scalar
     app.MapScalarApiReference().AllowAnonymous();
-
-    // Geliştirmede uygulama açılırken bekleyen migration'ları uygula ve demo veriyi yükle.
-    // Üretimde bunu otomatik yapmayacağız; migration'lar kontrollü şekilde çalıştırılacak.
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<AdisyonDbContext>();
-    await db.Database.MigrateAsync();
-    await DevDataSeeder.SeedAsync(db, scope.ServiceProvider.GetRequiredService<SecretHasher>());
+}
+else
+{
+    // Kurulumda web ekranları da bu programdan sunulur (wwwroot = web uygulamasının derlenmiş hâli):
+    // tek program, tek adres. Restorandaki diğer cihazlar http://<kasa-bilgisayarı>:5000 adresini açar.
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
 }
 
-// HTTPS yönlendirmesi yok: üretimde TLS'i önündeki Caddy sunucusu yapacak.
+// HTTPS yok: sistem restoranın kendi yerel ağında çalışır.
 
 app.UseRateLimiter();
 app.UseAuthentication();
@@ -140,5 +160,13 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<BranchHub>(BranchHub.Path);
+
+if (!app.Environment.IsDevelopment())
+{
+    // /masa/5 gibi ekran adresleri sayfa yenilenince de açılsın: bilinmeyen adreslerde web uygulamasını döndür.
+    // Bilinmeyen /api adresleri ise web sayfası değil, 404 dönmeli.
+    app.Map("/api/{**rest}", () => Results.NotFound()).AllowAnonymous();
+    app.MapFallbackToFile("index.html").AllowAnonymous();
+}
 
 app.Run();

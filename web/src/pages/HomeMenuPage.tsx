@@ -39,6 +39,18 @@ export default function HomeMenuPage() {
       <main className="mx-auto max-w-4xl space-y-6 p-4">
         <p className="text-lg text-stone-700">Hoş geldiniz, <span className="font-semibold">{user?.displayName}</span></p>
 
+        {tables.isSuccess && tables.data.length === 0 && (
+          <section className="rounded-2xl bg-amber-50 p-5 ring-1 ring-amber-200">
+            <h2 className="font-semibold text-amber-900">Kuruluma devam edin</h2>
+            <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-amber-900">
+              <li><Link to="/yonetim?sekme=menu" className="font-semibold underline">Menüyü girin</Link>: kategoriler, ürünler ve fiyatlar.</li>
+              <li><Link to="/yonetim?sekme=masalar" className="font-semibold underline">Masaları ekleyin</Link>.</li>
+              <li><Link to="/yonetim?sekme=personel" className="font-semibold underline">Personeli ekleyin</Link>: her birine bir PIN verin.</li>
+              <li>Başka bilgisayar veya tablet varsa <Link to="/yonetim?sekme=cihazlar" className="font-semibold underline">eşleştirme kodu oluşturun</Link>.</li>
+            </ol>
+          </section>
+        )}
+
         <TileGrid tiles={work} />
 
         <section>

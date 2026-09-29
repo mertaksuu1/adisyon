@@ -19,6 +19,12 @@ export type PairDeviceResponse = {
   branchName: string
 }
 
+/** İlk kurulum sonucu: bu bilgisayar eşleştirilmiş ve işletme sahibi giriş yapmış olur. */
+export type SetupResponse = {
+  device: PairDeviceResponse
+  login: LoginResponse
+}
+
 export type LoginResponse = {
   token: string
   expiresAt: string

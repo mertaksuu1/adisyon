@@ -480,3 +480,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Kurulum paketi çıktıları
+src/Adisyon.Api/wwwroot/
+dist/
