@@ -31,7 +31,7 @@ public class AiTests(ApiFactory factory)
 
         Assert.False(status!.Configured);
         Assert.False(summary!.Available);
-        Assert.Contains("ayarlanmamış", summary.Text);
+        Assert.Equal(AiPackage.NotEnabledMessage, summary.Text);
         Assert.False(answer!.Available);
     }
 

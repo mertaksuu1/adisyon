@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { AdjustmentLine, AiResult, ZReport } from '../api/types'
 import { AiText } from '../components/AiText'
+import { AI_PACKAGE_OFF_TEXT, useAiPackage } from '../lib/useAiPackage'
 import { HomeBackLink } from '../components/BackLink'
 import { TopBar } from '../components/TopBar'
 import { formatMoney, formatTime } from '../lib/format'
@@ -129,12 +130,24 @@ export default function ReportPage() {
 
 /** Yapay zeka yorumu: düğmeye basılınca istenir (her rapor açılışında değil; kullandıkça ücretli). */
 function DayCommentary({ date }: { date: string }) {
+  const aiEnabled = useAiPackage()
   const [result, setResult] = useState<AiResult | null>(null)
   const ask = useMutation({
     mutationFn: () => api<AiResult>('POST', `/ai/z-summary?date=${date}`),
     onSuccess: setResult,
     onError: (err) => setResult({ available: false, text: err.message }),
   })
+
+  if (aiEnabled === false) {
+    return (
+      <Section title="Yapay zeka yorumu · ek paket">
+        <p className="text-sm text-stone-600">
+          Günü dün ve geçen haftanın aynı günüyle karşılaştırıp kısa bir özet çıkarır; dikkat çeken iptalleri gösterir.
+        </p>
+        <p className="mt-2 rounded-lg bg-violet-50 px-3 py-2 text-sm text-violet-900">{AI_PACKAGE_OFF_TEXT}</p>
+      </Section>
+    )
+  }
 
   return (
     <Section title="Yapay zeka yorumu">

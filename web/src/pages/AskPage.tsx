@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { AiResult } from '../api/types'
 import { AiText } from '../components/AiText'
 import { HomeBackLink } from '../components/BackLink'
 import { TopBar } from '../components/TopBar'
+import { AI_PACKAGE_OFF_TEXT, useAiPackage } from '../lib/useAiPackage'
 
 const EXAMPLES = [
   'Bu hafta ciro geçen haftaya göre nasıl?',
@@ -20,7 +21,8 @@ type Exchange = { question: string; answer: AiResult }
  * Sorular ve cevaplar yalnızca bu ekranda tutulur; sayfadan çıkınca silinir.
  */
 export default function AskPage() {
-  const status = useQuery({ queryKey: ['ai-status'], queryFn: () => api<{ configured: boolean }>('GET', '/ai/status') })
+  const aiEnabled = useAiPackage()
+  const off = aiEnabled === false
   const [question, setQuestion] = useState('')
   const [history, setHistory] = useState<Exchange[]>([])
 
@@ -42,10 +44,15 @@ export default function AskPage() {
     <div className="min-h-screen bg-stone-100">
       <TopBar title="Rapora sor" left={<HomeBackLink currentPath="/soru" />} />
       <main className="mx-auto max-w-3xl space-y-4 p-4">
-        {status.data && !status.data.configured && (
-          <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-200">
-            Yapay zeka henüz ayarlanmamış (API anahtarı gerekli). Kurulumu yapan kişiye başvurun.
-          </p>
+        {off && (
+          <section className="rounded-2xl bg-violet-50 p-4 ring-1 ring-violet-200">
+            <p className="font-semibold text-violet-900">Yapay zeka ek paketi</p>
+            <p className="mt-1 text-sm text-violet-900">
+              Satışlarınıza Türkçe soru sorun: "Geçen ay en çok ne sattık?", "En yoğun saatlerimiz hangileri?",
+              "Bu hafta ciro geçen haftaya göre nasıl?" Cevaplar kendi satış kayıtlarınızdan hazırlanır.
+            </p>
+            <p className="mt-2 text-sm font-medium text-violet-900">{AI_PACKAGE_OFF_TEXT}</p>
+          </section>
         )}
 
         <form onSubmit={submit} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-stone-200">
@@ -56,12 +63,13 @@ export default function AskPage() {
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               maxLength={500}
+              disabled={off}
               placeholder="ör. Geçen hafta en çok ne sattık?"
-              className="flex-1 rounded-xl border border-stone-300 px-4 py-3 focus:border-violet-600 focus:ring-2 focus:ring-violet-200 focus:outline-none"
+              className="flex-1 rounded-xl border border-stone-300 px-4 py-3 focus:border-violet-600 focus:ring-2 focus:ring-violet-200 focus:outline-none disabled:bg-stone-100"
             />
             <button
               type="submit"
-              disabled={!question.trim() || ask.isPending}
+              disabled={off || !question.trim() || ask.isPending}
               className="rounded-xl bg-violet-700 px-5 font-semibold text-white transition hover:bg-violet-800 disabled:opacity-40"
             >
               Sor
@@ -72,7 +80,7 @@ export default function AskPage() {
               <button
                 key={e}
                 type="button"
-                disabled={ask.isPending}
+                disabled={off || ask.isPending}
                 onClick={() => ask.mutate(e)}
                 className="rounded-full bg-stone-100 px-3 py-1.5 text-sm text-stone-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-40"
               >

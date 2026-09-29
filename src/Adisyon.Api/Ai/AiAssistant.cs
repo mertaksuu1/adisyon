@@ -7,7 +7,7 @@ using Adisyon.Api.Reports;
 namespace Adisyon.Api.Ai;
 
 /// <summary>
-/// Claude ile konuşan tek yer: gün sonu yorumu ve rapora soru sorma.
+/// Claude ile konuşan tek yer: gün sonu yorumu ve rapora soru sorma. Ücretli ek pakettir (bkz. AiPackage).
 ///
 /// API anahtarı "Anthropic:ApiKey" ayarından (kurulumda data/appsettings.Local.json) veya ANTHROPIC_API_KEY
 /// ortam değişkeninden okunur. Anahtar yoksa ya da internet yoksa özellik "kullanılamıyor" der; satış ve kasa
@@ -191,7 +191,8 @@ public class AiAssistant(IConfiguration configuration, ILogger<AiAssistant> logg
     {
         if (!IsConfigured)
         {
-            return AiResult.Unavailable("Yapay zeka ayarlanmamış (API anahtarı yok).");
+            // Ek paket: işletme için açılmamış (satıcının API anahtarı bu kuruluma eklenmemiş).
+            return AiResult.Unavailable(AiPackage.NotEnabledMessage);
         }
         try
         {
@@ -216,6 +217,12 @@ public class AiAssistant(IConfiguration configuration, ILogger<AiAssistant> logg
             return AiResult.Unavailable("Yapay zeka zamanında cevap vermedi. Tekrar deneyin.");
         }
     }
+}
+
+/// <summary>Yapay zeka ücretli bir ek pakettir: satıcı, paketi alan işletmenin kurulumuna API anahtarını ekler.</summary>
+public static class AiPackage
+{
+    public const string NotEnabledMessage = "Yapay zeka ek paketi bu işletmede açık değil. Açtırmak için satıcınızla görüşün.";
 }
 
 /// <summary>Available false ise Text kullanıcıya gösterilecek açıklamadır.</summary>

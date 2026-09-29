@@ -5,13 +5,15 @@ import type { Table } from '../api/types'
 import { useAuth } from '../auth/useAuth'
 import { TopBar } from '../components/TopBar'
 import { formatMoney } from '../lib/format'
+import { useAiPackage } from '../lib/useAiPackage'
 
-type Tile = { to: string; title: string; subtitle: string; primary?: boolean }
+type Tile = { to: string; title: string; subtitle: string; primary?: boolean; badge?: string }
 
 /** Sahip ve yöneticinin PIN'den sonra gördüğü ana menü: büyük düğmelerle bölümler. */
 export default function HomeMenuPage() {
   const { user } = useAuth()
   const tables = useQuery({ queryKey: ['tables'], queryFn: () => api<Table[]>('GET', '/tables') })
+  const aiEnabled = useAiPackage()
 
   const open = tables.data?.filter((t) => t.isActive && t.openSession) ?? []
   const openTotal = open.reduce((sum, t) => sum + (t.openSession?.total ?? 0), 0)
@@ -25,7 +27,12 @@ export default function HomeMenuPage() {
     },
     { to: '/rapor', title: 'Gün sonu raporu', subtitle: 'Z raporu, tahsilat, iptal ve ikramlar' },
     { to: '/fisler', title: 'Fişler', subtitle: 'Mutfak, hesap ve rapor fişleri' },
-    { to: '/soru', title: 'Rapora sor', subtitle: 'Satışlarınıza Türkçe soru sorun (yapay zeka)' },
+    {
+      to: '/soru',
+      title: 'Rapora sor',
+      subtitle: aiEnabled === false ? 'Yapay zeka' : 'Satışlarınıza Türkçe soru sorun (yapay zeka)',
+      badge: aiEnabled === false ? 'Ek paket' : undefined,
+    },
   ]
   const settings: Tile[] = [
     { to: '/yonetim?sekme=menu', title: 'Menü', subtitle: 'Kategori, ürün ve fiyatlar' },
@@ -76,7 +83,10 @@ function TileGrid({ tiles }: { tiles: Tile[] }) {
             }`}
           >
             <span className="text-xl font-bold">{t.title}</span>
-            <span className={`text-sm ${t.primary ? 'text-amber-100' : 'text-stone-500'}`}>{t.subtitle}</span>
+            <span className={`text-sm ${t.primary ? 'text-amber-100' : 'text-stone-500'}`}>
+              {t.badge && <span className="mr-1.5 rounded bg-violet-100 px-1.5 py-0.5 text-xs font-semibold text-violet-800">{t.badge}</span>}
+              {t.subtitle}
+            </span>
           </Link>
         </li>
       ))}
