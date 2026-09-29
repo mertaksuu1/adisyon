@@ -8,7 +8,7 @@ namespace Adisyon.Api.Tests;
 
 /// <summary>
 /// İlk kurulum sihirbazı. Boş bir veritabanı gerektirdiği için diğer testlerle paylaşılmayan,
-/// kendi ayrı PostgreSQL konteynerini kullanır (IClassFixture: bu sınıfa özel ApiFactory).
+/// kendi ayrı veritabanı dosyasını kullanır (IClassFixture: bu sınıfa özel ApiFactory).
 /// </summary>
 public class SetupTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {

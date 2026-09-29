@@ -8,27 +8,22 @@ Yapay zeka destekli, QR menülü restoran adisyon sistemi (SaaS).
 src/Adisyon.Api/          ASP.NET Core (.NET 10) Web API
 tests/Adisyon.Api.Tests/  API testleri (xUnit)
 web/                      React + Vite + TypeScript + Tailwind arayüzü
-docker-compose.yml        Geliştirme servisleri (PostgreSQL)
 ```
 
 ## Gereksinimler
 
 - .NET 10 SDK
 - Node.js 20.19+ (npm ile)
-- Docker Desktop
 
 ## Çalıştırma
 
-Üç ayrı terminalde:
+İki ayrı terminalde:
 
 ```bash
-# 1) Veritabanı (Docker Desktop açık olmalı)
-docker compose up -d
-
-# 2) API → http://localhost:5260  (dokümantasyon: http://localhost:5260/scalar)
+# 1) API (veritabanı src/Adisyon.Api/adisyon-dev.db dosyasıdır; ilk açılışta oluşur) → http://localhost:5260  (dokümantasyon: http://localhost:5260/scalar)
 dotnet run --project src/Adisyon.Api
 
-# 3) Web arayüzü → http://localhost:5173
+# 2) Web arayüzü → http://localhost:5173
 cd web
 npm install   # yalnızca ilk seferde
 npm run dev
@@ -56,11 +51,11 @@ dotnet tool restore   # yalnızca ilk seferde
 dotnet ef migrations add DegisikliginAdi --project src/Adisyon.Api --output-dir Data/Migrations
 ```
 
-API bir sonraki açılışta migration'ı uygular. Demo veriyi sıfırlamak için: `docker compose down -v && docker compose up -d`.
+API bir sonraki açılışta migration'ı uygular. Demo veriyi sıfırlamak için API'yi kapatıp `src/Adisyon.Api/adisyon-dev.db*` dosyalarını silin.
 
 ## Testler
 
-Testler Docker'da geçici bir PostgreSQL açar, bu yüzden Docker Desktop açık olmalı.
+Testler her çalıştırmada geçici bir SQLite veritabanı dosyası kullanır.
 
 ```bash
 dotnet test
@@ -78,8 +73,4 @@ scripts/build-package.sh win-x64
 - `data/secrets.json` içinde bu kuruluma özel gizli anahtarlar üretilir. **Bu dosya veritabanıyla birlikte yedeklenmeli**; kaybolursa PIN'ler çalışmaz.
 - Veritabanı boşsa tarayıcıda ilk kurulum sihirbazı açılır (restoran, şube, işletme sahibi ve PIN).
 
-Veritabanı bağlantısı `data/appsettings.Local.json` dosyasına yazılır:
-
-```json
-{ "ConnectionStrings": { "Adisyon": "Host=localhost;Port=5432;Database=adisyon;Username=adisyon;Password=..." } }
-```
+Veritabanı `data/adisyon.db` dosyasıdır (SQLite; ayrı veritabanı kurulumu gerekmez). **Yedek almak için `data` klasörünün tamamını kopyalayın**; gizli anahtarlar da oradadır.

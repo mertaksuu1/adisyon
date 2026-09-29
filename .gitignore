@@ -484,3 +484,8 @@ $RECYCLE.BIN/
 # Kurulum paketi çıktıları
 src/Adisyon.Api/wwwroot/
 dist/
+
+# SQLite veritabanı dosyaları (geliştirme)
+*.db
+*.db-shm
+*.db-wal

@@ -20,14 +20,15 @@ LocalInstall.AddLocalConfiguration(builder);
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<TenantContext>();
 
-// Bağlantı dizesi: geliştirmede appsettings.Development.json, kurulumda data/appsettings.Local.json,
-// testlerde test veritabanınınki.
+// Bağlantı dizesi: geliştirmede appsettings.Development.json, kurulumda data/adisyon.db (LocalInstall),
+// testlerde her test çalıştırması için geçici bir dosya.
 builder.Services.AddDbContext<AdisyonDbContext>((services, options) =>
 {
     var connectionString = services.GetRequiredService<IConfiguration>().GetConnectionString("Adisyon")
         ?? throw new InvalidOperationException("ConnectionStrings:Adisyon ayarı eksik.");
-    options.UseNpgsql(connectionString)
-        // C#'taki "OrderItem" veritabanında "order_items" olur; PostgreSQL geleneği budur.
+    // SQLite: veritabanı tek bir dosya (kurulumda data/adisyon.db). Ayrı veritabanı sunucusu gerekmez.
+    options.UseSqlite(connectionString)
+        // C#'taki "OrderItem" veritabanında "order_items" olur.
         .UseSnakeCaseNamingConvention();
 });
 
@@ -117,6 +118,9 @@ if (!app.Environment.IsEnvironment("Testing"))
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AdisyonDbContext>();
     await db.Database.MigrateAsync();
+    // WAL modu: biri yazarken diğerleri okumaya devam edebilir (kasa ödeme alırken tablet masa listesini görür).
+    // Veritabanı dosyasına kalıcı olarak yazılır; her açılışta tekrar çalıştırmak zararsızdır.
+    await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
 
     if (app.Environment.IsDevelopment())
     {

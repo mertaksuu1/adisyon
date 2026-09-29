@@ -7,7 +7,6 @@ using Adisyon.Api.Realtime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace Adisyon.Api.Controllers;
 
@@ -47,7 +46,7 @@ public class SessionsController(
         {
             await db.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
         {
             // Veritabanındaki "masada tek açık adisyon" kuralı devreye girdi. İki garson aynı anda
             // açmaya çalıştıysa ikincisi buraya düşer; mevcut adisyonu ona gösteriyoruz.
@@ -375,7 +374,7 @@ public class SessionsController(
                 return StaleSession();
             }
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
         {
             return Problem(statusCode: StatusCodes.Status409Conflict, title: $"{target.Name} az önce açıldı. Tekrar deneyin.");
         }

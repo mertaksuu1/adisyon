@@ -2,6 +2,7 @@ using System.Reflection;
 using Adisyon.Api.Domain;
 using Adisyon.Api.Tenancy;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Adisyon.Api.Data;
 
@@ -28,6 +29,14 @@ public class AdisyonDbContext(DbContextOptions<AdisyonDbContext> options, Tenant
     /// olmadığı için sonuç boş gelir. Yani bir şey unutulursa veri sızmaz, sadece görünmez.
     /// </summary>
     private Guid CurrentTenantId => tenantContext.TenantId ?? Guid.Empty;
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        // SQLite'ın tarih-saat türü yok; DateTimeOffset'i sayı olarak saklıyoruz. Böylece "05:00'ten sonra"
+        // gibi karşılaştırmalar ve sıralamalar veritabanında yapılabiliyor. (Değerler hep UTC kaydedilir.)
+        configurationBuilder.Properties<DateTimeOffset>().HaveConversion<DateTimeOffsetToBinaryConverter>();
+        configurationBuilder.Properties<DateTimeOffset?>().HaveConversion<DateTimeOffsetToBinaryConverter>();
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -75,7 +84,8 @@ public class AdisyonDbContext(DbContextOptions<AdisyonDbContext> options, Tenant
         {
             // Enum'ları sayı yerine metin olarak saklıyoruz; veritabanına bakınca "Open" okumak "0"dan kolay.
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
-            e.Property(x => x.Version).IsRowVersion();
+            // Sürüm sayacı: UPDATE ... WHERE version = <istemcinin gördüğü> şeklinde kontrol edilir.
+            e.Property(x => x.Version).IsConcurrencyToken();
             e.HasOne<TableSession>().WithMany().HasForeignKey(x => x.MergedIntoSessionId)
                 .OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Table).WithMany().HasForeignKey(x => x.TableId)
@@ -166,13 +176,28 @@ public class AdisyonDbContext(DbContextOptions<AdisyonDbContext> options, Tenant
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         ApplyTenantRules();
+        BumpSessionVersions();
         return base.SaveChangesAsync(cancellationToken);
     }
 
     public override int SaveChanges()
     {
         ApplyTenantRules();
+        BumpSessionVersions();
         return base.SaveChanges();
+    }
+
+    /// <summary>
+    /// Değişen her adisyonun sürümünü bir artırır. EF, UPDATE'e "WHERE version = eski sürüm" ekler;
+    /// o arada başka biri kaydettiyse hiçbir satır güncellenmez ve DbUpdateConcurrencyException oluşur.
+    /// </summary>
+    private void BumpSessionVersions()
+    {
+        foreach (var entry in ChangeTracker.Entries<TableSession>().Where(e => e.State == EntityState.Modified))
+        {
+            var version = entry.Property(x => x.Version);
+            version.CurrentValue = version.OriginalValue + 1;
+        }
     }
 
     /// <summary>
