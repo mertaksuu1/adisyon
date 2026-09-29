@@ -130,9 +130,13 @@ public class AuthController(
         return user is null ? NotFound() : UserDto.From(user);
     }
 
+    /// <summary>Arayüz bu kodu görünce cihazı kendiliğinden eşleştirilmemiş sayar ve kurulum ekranına döner.</summary>
+    public const string DeviceNotRecognizedCode = "device_not_recognized";
+
     private ObjectResult DeviceNotRecognized() =>
         Problem(statusCode: StatusCodes.Status401Unauthorized,
-            title: "Bu cihaz tanınmadı. Şubenin eşleştirme koduyla yeniden eşleştirin.");
+            title: "Bu cihaz tanınmadı. Şubenin eşleştirme koduyla yeniden eşleştirin.",
+            extensions: new Dictionary<string, object?> { ["code"] = DeviceNotRecognizedCode });
 }
 
 public record PairDeviceRequest(

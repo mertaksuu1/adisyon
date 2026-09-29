@@ -159,4 +159,42 @@ public class AdminTests(ApiFactory factory)
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Deactivating_staff_ends_their_open_session_immediately()
+    {
+        var restaurant = await factory.CreateRestaurantAsync();
+        var owner = await factory.LoginAsync(restaurant, UserRole.Owner);
+        var waiter = await factory.LoginAsync(restaurant, UserRole.Waiter);
+        var me = await waiter.GetFromJsonAsync<UserDto>("/api/auth/me", ApiFactory.JsonOptions);
+
+        (await owner.PutAsJsonAsync($"/api/users/{me!.Id}",
+            new UpdateUserRequest(me.DisplayName, UserRole.Waiter, null, IsActive: false), ApiFactory.JsonOptions)).EnsureSuccessStatusCode();
+
+        // Garsonun elindeki giriş kartı hâlâ "geçerli imzalı", ama artık kabul edilmemeli.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await waiter.GetAsync("/api/tables")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Revoking_a_device_ends_sessions_on_it_immediately()
+    {
+        var restaurant = await factory.CreateRestaurantAsync();
+        var owner = await factory.LoginAsync(restaurant, UserRole.Owner);
+        var waiter = await factory.LoginAsync(restaurant, UserRole.Waiter); // kendi cihazında
+        var devices = (await owner.GetFromJsonAsync<List<DeviceDto>>("/api/devices", ApiFactory.JsonOptions))!;
+        var waiterDevice = devices.Where(d => !d.IsCurrent).OrderByDescending(d => d.CreatedAt).First();
+
+        (await owner.PostAsync($"/api/devices/{waiterDevice.Id}/revoke", null)).EnsureSuccessStatusCode();
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await waiter.GetAsync("/api/tables")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Unknown_device_gets_a_code_the_screen_can_act_on()
+    {
+        var response = await factory.PinLoginAsync("silinmis-veya-uydurma-cihaz", "1234");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Contains(AuthController.DeviceNotRecognizedCode, await response.Content.ReadAsStringAsync());
+    }
 }

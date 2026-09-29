@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
+import { ApiError } from '../api/client'
 import { useAuth } from '../auth/useAuth'
 import { homePathFor } from '../auth/roles'
 import { PinPad } from '../components/PinPad'
@@ -25,6 +26,12 @@ export default function PinPage() {
       const user = await loginWithPin(pin)
       navigate(homePathFor(user.role), { replace: true })
     } catch (err) {
+      // Cihaz artık tanınmıyor (bağlantısı kesilmiş veya sistem yeniden kurulmuş): kurulum ekranına dön.
+      if (err instanceof ApiError && err.extensions.code === 'device_not_recognized') {
+        unpair()
+        navigate('/kurulum', { replace: true })
+        return
+      }
       setError(err instanceof Error ? err.message : 'Giriş başarısız.')
     }
   }

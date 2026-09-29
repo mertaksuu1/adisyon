@@ -80,6 +80,23 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
                 }
                 return Task.CompletedTask;
             },
+            // İmza doğru olsa bile kartı her istekte veritabanıyla doğrula: kişi pasife alındıysa, cihazın
+            // bağlantısı kesildiyse veya kayıt artık yoksa (ör. veritabanı yeniden kuruldu) oturum hemen geçersiz olur.
+            // Yoksa eski kart 12 saat boyunca çalışmaya (ve boş ekranlar göstermeye) devam ederdi.
+            OnTokenValidated = async context =>
+            {
+                var principal = context.Principal!;
+                var db = context.HttpContext.RequestServices.GetRequiredService<AdisyonDbContext>();
+                var userId = principal.GetUserId();
+                var deviceId = Guid.TryParse(principal.FindFirst(TokenService.ClaimNames.DeviceId)?.Value, out var d) ? d : Guid.Empty;
+
+                var userActive = await db.Users.IgnoreQueryFilters().AnyAsync(u => u.Id == userId && u.IsActive);
+                var deviceActive = await db.Devices.IgnoreQueryFilters().AnyAsync(x => x.Id == deviceId && x.IsActive);
+                if (!userActive || !deviceActive)
+                {
+                    context.Fail("Oturum artık geçerli değil.");
+                }
+            },
         };
     });
 
