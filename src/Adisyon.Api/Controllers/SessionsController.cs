@@ -283,6 +283,7 @@ public class SessionsController(
             order.Items.Add(part);
         }
         var now = timeProvider.GetUtcNow();
+        part.AdjustedAtTableName = session.Table!.Name;
         if (isVoid)
         {
             (part.VoidedAt, part.VoidedByUserId) = (now, User.GetUserId());

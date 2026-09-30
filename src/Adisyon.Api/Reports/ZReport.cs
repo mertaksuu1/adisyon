@@ -91,7 +91,7 @@ public record ZReport(
             orderby adjustedAt
             select new AdjustmentLine(
                 adjustedAt!.Value,
-                o.TableSession!.Table!.Name,
+                i.AdjustedAtTableName ?? o.TableSession!.Table!.Name,
                 i.ProductName,
                 i.Quantity,
                 i.UnitPrice * i.Quantity,

@@ -114,6 +114,7 @@ public class AdisyonDbContext(DbContextOptions<AdisyonDbContext> options, Tenant
             e.Property(x => x.ProductName).HasMaxLength(200);
             e.Property(x => x.UnitPrice).HasPrecision(10, 2);
             e.Property(x => x.Note).HasMaxLength(500);
+            e.Property(x => x.AdjustedAtTableName).HasMaxLength(100);
             e.HasOne<Order>().WithMany(o => o.Items).HasForeignKey(x => x.OrderId)
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasOne<Product>().WithMany().HasForeignKey(x => x.ProductId)

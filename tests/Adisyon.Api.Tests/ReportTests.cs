@@ -62,6 +62,27 @@ public class ReportTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Void_keeps_the_table_it_was_made_at_even_after_the_table_moves()
+    {
+        var restaurant = await factory.CreateRestaurantAsync();
+        var manager = await factory.LoginAsync(restaurant, UserRole.Manager);
+        var category = await MenuTests.CreateCategoryAsync(manager, "Menü");
+        var ayran = await MenuTests.CreateProductAsync(manager, category.Id, "Ayran", 40m);
+        var inside = await CreateTableAsync(manager, "Salon 1");
+        var garden = await CreateTableAsync(manager, "Bahçe 3");
+
+        var s = await PostAsync<SessionDto>(manager, $"/api/tables/{inside.Id}/session", null);
+        s = await PostAsync<SessionDto>(manager, $"/api/sessions/{s.Id}/orders", new AddOrderRequest([new AddOrderItem(ayran.Id, 2)]));
+        s = await PostAsync<SessionDto>(manager, $"/api/sessions/{s.Id}/items/{s.Orders.Single().Items.Single().Id}/void", new AdjustItemRequest(1, s.Version));
+        // Müşteri iptalden sonra bahçeye geçti.
+        await PostAsync<SessionDto>(manager, $"/api/sessions/{s.Id}/move", new MoveSessionRequest(garden.Id, s.Version));
+
+        var z = await manager.GetFromJsonAsync<ZReport>("/api/reports/z", ApiFactory.JsonOptions);
+
+        Assert.Equal("Salon 1", Assert.Single(z!.Voids).TableName);
+    }
+
+    [Fact]
     public async Task Report_of_another_day_or_restaurant_is_empty()
     {
         var (_, manager, _) = await RunADayAsync();

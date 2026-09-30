@@ -41,6 +41,13 @@ public class OrderItem : ITenantOwned
     public bool IsCharged => VoidedAt is null && CompedAt is null;
 
     /// <summary>
+    /// İptal/ikram anındaki masa adı. Masa sonradan taşınır veya birleştirilirse Z raporu yine işlemin
+    /// yapıldığı masayı gösterir. (Bu alan eklenmeden önceki kayıtlarda boştur; rapor o zaman adisyonun
+    /// şimdiki masasını kullanır.)
+    /// </summary>
+    public string? AdjustedAtTableName { get; set; }
+
+    /// <summary>
     /// Satırdan belirli adedi ayırıp yeni bir satır yapar; ör. "2 x Kebap"tan 1'ini iptal etmek için.
     /// Adedin tamamı istenirse satırın kendisini döndürür.
     /// </summary>
